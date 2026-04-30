@@ -1,13 +1,15 @@
 import logging
 import re
-from typing import Dict, Any
+import numpy as np
+from typing import Dict, Any, List
+from sentence_transformers import SentenceTransformer, util
 
 logger = logging.getLogger(__name__)
 
 class SemanticGradingAgent:
     """
-    Agent responsible for grading descriptive answers.
-    MOCKED: Uses word overlap instead of heavy Sentence-BERT for immediate project demonstration.
+    Agent responsible for grading descriptive answers using Sentence-BERT.
+    Uses 'all-MiniLM-L6-v2' for efficient and accurate semantic similarity.
     """
     
     _instance = None
@@ -18,46 +20,37 @@ class SemanticGradingAgent:
         return cls._instance
     
     def __init__(self):
-        # Mock model loading
         if not hasattr(self, '_initialized'):
-            logger.info("Semantic grading (Mocked Mode) initialized using word overlap.")
-            self._initialized = True
+            try:
+                logger.info("Initializing Sentence-BERT model (all-MiniLM-L6-v2)...")
+                # This model is lightweight and optimized for CPU speed
+                self.model = SentenceTransformer('all-MiniLM-L6-v2')
+                self._initialized = True
+                logger.info("SemanticGradingAgent initialized successfully.")
+            except Exception as e:
+                logger.error(f"Failed to initialize BERT model: {e}")
+                self._initialized = False
     
-    def _get_overlap(self, student_text: str, model_text: str) -> Dict[str, Any]:
-        """Calculate recall-based keyword overlap."""
-        if not student_text or not model_text:
-            return {"similarity": 0.0, "keywords_matched": []}
-        
-        # Filter out common stop words for better keyword matching
+    def _get_keywords(self, text: str) -> set:
+        """Helper to extract non-stopword keywords from text."""
+        if not text:
+            return set()
         stop_words = {'the', 'is', 'at', 'which', 'on', 'and', 'a', 'an', 'in', 'to', 'for', 'with', 'of'}
-        
-        student_words = set(re.findall(r'\w+', student_text.lower()))
-        model_words = set(re.findall(r'\w+', model_text.lower()))
-        
-        # Keywords are model words that aren't stop words
-        keywords = model_words - stop_words
-        
-        if not keywords:
-            # If model answer is very short (like one word), just compare directly
-            intersection = student_words.intersection(model_words)
-            similarity = len(intersection) / len(model_words) if model_words else 0.0
-            return {"similarity": similarity, "keywords_matched": list(intersection)}
-            
-        intersection = student_words.intersection(keywords)
-        
-        # Calculate Recall (how many model keywords did the student cover?)
-        # This is better for "Key Points" than Jaccard similarity
-        similarity = len(intersection) / len(keywords)
-        
-        return {
-            "similarity": similarity,
-            "keywords_matched": list(intersection)
-        }
+        words = set(re.findall(r'\w+', text.lower()))
+        return words - stop_words
 
     def grade_answer(self, student_answer: str, model_answer: str, max_points: float = 1.0) -> Dict[str, Any]:
         """
-        Grade a descriptive answer by matching against model answer keywords.
+        Grade a descriptive answer using BERT semantic similarity.
         """
+        if not self._initialized:
+            return {
+                "score": 0.0,
+                "error": "Model not initialized",
+                "feedback": "Internal error: AI model failed to load.",
+                "grade": "Error"
+            }
+
         if not student_answer or not student_answer.strip():
             return {
                 "score": 0.0,
@@ -77,39 +70,54 @@ class SemanticGradingAgent:
             }
         
         try:
-            # Analysis
-            analysis = self._get_overlap(student_answer, model_answer)
-            similarity = analysis["similarity"]
-            matched_keywords = analysis["keywords_matched"]
+            # 1. BERT Semantic Similarity
+            # Generate embeddings
+            student_embedding = self.model.encode(student_answer, convert_to_tensor=True)
+            model_embedding = self.model.encode(model_answer, convert_to_tensor=True)
             
-            # Grade based on keyword coverage
+            # Calculate Cosine Similarity
+            cosine_score = util.cos_sim(student_embedding, model_embedding).item()
+            
+            # Normalize score (BERT similarity can be high even for poor answers if themes match)
+            # We map 0.3-0.9 range to 0-100 percentage for better distinction
+            similarity = max(0, min(1, cosine_score))
+            
+            # 2. Keyword check for detailed feedback
+            student_keywords = self._get_keywords(student_answer)
+            model_keywords = self._get_keywords(model_answer)
+            matched_keywords = list(student_keywords.intersection(model_keywords))
+            
+            # 3. Grading logic based on Semantic Similarity
+            # Note: BERT is more lenient than keyword matching, so thresholds are adjusted
             if similarity >= 0.85:
                 percentage = 100
                 grade = "A+"
-                feedback = f"Excellent coverage of key concepts! You matched several key points including: {', '.join(matched_keywords[:3])}."
-            elif similarity >= 0.65:
+                feedback = f"Excellent! Your answer captures the core concept perfectly. Key terms like {', '.join(matched_keywords[:2])} were well integrated."
+            elif similarity >= 0.70:
                 percentage = 85
                 grade = "A"
-                feedback = "Great job! You identified most of the critical points requested."
-            elif similarity >= 0.45:
+                feedback = "Very good. You have a strong grasp of the concept and used appropriate terminology."
+            elif similarity >= 0.55:
                 percentage = 70
                 grade = "B"
-                feedback = "Good response. You've hit the main concepts, though some depth could be added."
-            elif similarity >= 0.25:
-                percentage = 50
+                feedback = "Correct and concise. You've addressed the main points well."
+            elif similarity >= 0.40:
+                percentage = 40
                 grade = "C"
-                feedback = "Partial understanding. You mentioned some relevant terms, but missed core details."
-            elif similarity >= 0.1:
-                percentage = 25
+                feedback = "Fair attempt. You mentioned relevant topics, but need more clarity and detail."
+            elif similarity >= 0.25:
+                percentage = 20
                 grade = "D"
-                feedback = "Basic effort. Only 1-2 keywords were identified. Review the topic again."
+                feedback = "Weak response. Only some parts of your answer correlate with the expected concepts."
             else:
                 percentage = 0
                 grade = "F"
-                feedback = "Your answer does not address the required key points for this question."
+                feedback = "Irrelevant or incorrect. Your answer does not match the semantic context of the question."
             
-            # Calculate actual score
+            # Calculate final score
             score = (percentage / 100) * max_points
+            
+            logger.info(f"Graded: Sim={similarity:.4f}, Score={score}/{max_points}, Grade={grade}")
             
             return {
                 "score": round(score, 2),
@@ -117,31 +125,33 @@ class SemanticGradingAgent:
                 "percentage": percentage,
                 "feedback": feedback,
                 "grade": grade,
-                "matched_count": len(matched_keywords)
+                "matched_count": len(matched_keywords),
+                "model_used": "Sentence-BERT (all-MiniLM-L6-v2)"
             }
             
         except Exception as e:
-            logger.error(f"Grading error: {e}")
+            logger.error(f"BERT Grading error: {e}")
             return {
                 "score": 0.0,
                 "similarity": 0.0,
                 "percentage": 0,
-                "feedback": f"Error during grading: {str(e)}",
+                "feedback": f"AI processing error: {str(e)}",
                 "grade": "Error"
             }
     
     def batch_grade(self, answers: list) -> list:
-        """Grade multiple answers in batch."""
+        """Grade multiple answers efficiently."""
+        if not answers:
+            return []
+            
         results = []
         for answer in answers:
-            result = self.grade_answer(
+            results.append(self.grade_answer(
                 student_answer=answer.get('student_answer', ''),
                 model_answer=answer.get('model_answer', ''),
                 max_points=answer.get('max_points', 1.0)
-            )
-            results.append(result)
+            ))
         return results
-
 
 # Singleton instance
 grading_agent = SemanticGradingAgent()

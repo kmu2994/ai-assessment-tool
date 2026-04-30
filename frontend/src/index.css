@@ -14,17 +14,17 @@
     --popover: 0 0% 100%;
     --popover-foreground: 215 25% 15%;
 
-    --primary: 210 80% 55%;
+    --primary: 217 91% 45%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 210 80% 65%;
+    --primary-glow: 217 91% 55%;
 
-    --secondary: 180 65% 55%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 215 20% 65%;
+    --secondary-foreground: 215 25% 15%;
 
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
 
-    --accent: 180 70% 50%;
+    --accent: 217 91% 50%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -32,7 +32,7 @@
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 210 80% 55%;
+    --ring: 217 91% 45%;
 
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
@@ -40,16 +40,16 @@
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
-    --gradient-primary: linear-gradient(135deg, hsl(210 80% 55%), hsl(180 70% 50%));
-    --gradient-hero: linear-gradient(135deg, hsl(210 80% 60%), hsl(180 70% 55%));
-    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(210 40% 99%));
-    
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 45%), hsl(217 91% 55%));
+    --gradient-hero: linear-gradient(135deg, hsl(217 91% 50%), hsl(220 80% 60%));
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(210 40% 98%));
+
     --shadow-sm: 0 1px 2px 0 hsl(210 40% 85% / 0.05);
     --shadow-md: 0 4px 6px -1px hsl(210 40% 75% / 0.1);
     --shadow-lg: 0 10px 15px -3px hsl(210 40% 65% / 0.15);
-    --shadow-glow: 0 0 30px hsl(210 80% 55% / 0.2);
+    --shadow-glow: 0 0 20px hsl(217 91% 45% / 0.15);
 
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
@@ -73,17 +73,17 @@
     --popover: 215 25% 12%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 210 80% 60%;
+    --primary: 217 91% 55%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 210 80% 70%;
+    --primary-glow: 217 91% 65%;
 
-    --secondary: 180 65% 50%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 215 20% 40%;
+    --secondary-foreground: 210 40% 98%;
 
     --muted: 215 25% 20%;
     --muted-foreground: 215 16% 65%;
 
-    --accent: 180 70% 45%;
+    --accent: 217 91% 60%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
@@ -91,7 +91,7 @@
 
     --border: 215 25% 20%;
     --input: 215 25% 20%;
-    --ring: 210 80% 60%;
+    --ring: 217 91% 55%;
 
     --success: 142 76% 40%;
     --success-foreground: 0 0% 100%;
@@ -99,10 +99,10 @@
     --warning: 38 92% 55%;
     --warning-foreground: 0 0% 100%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(210 80% 50%), hsl(180 70% 45%));
-    --gradient-hero: linear-gradient(135deg, hsl(210 80% 55%), hsl(180 70% 50%));
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 50%), hsl(217 91% 60%));
+    --gradient-hero: linear-gradient(135deg, hsl(217 91% 55%), hsl(220 80% 65%));
     --gradient-card: linear-gradient(180deg, hsl(215 25% 12%), hsl(215 25% 14%));
-    
+
     --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
     --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.4);
     --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.5);
@@ -165,6 +165,7 @@
 }
 
 @layer utilities {
+
   /* Custom text balance for better typography */
   .text-balance {
     text-wrap: balance;
@@ -205,4 +206,16 @@
   .no-print {
     display: none !important;
   }
+}
+
+/* Hide number input spinners (rollers) */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+input[type=number] {
+  -moz-appearance: textfield;
 }

@@ -2,6 +2,23 @@
 version: '3.8'
 
 services:
+  # MongoDB Database Service
+  mongo:
+    image: mongo:7.0
+    container_name: ai-assessment-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=ai_assessment
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   # Backend API Service
   backend:
     build:
@@ -11,10 +28,17 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend/data:/app/data  # Persist SQLite database
+      - ./backend/uploads:/app/uploads
+      - ./backend/data:/app/data
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:///./data/assessment.db
-      - SECRET_KEY=your-super-secret-key-change-in-production
+      - MONGODB_URL=mongodb://mongo:27017
+      - DATABASE_NAME=ai_assessment
+      - SECRET_KEY=${SECRET_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - TESSERACT_CMD=/usr/bin/tesseract
+    depends_on:
+      mongo:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -29,13 +53,15 @@ services:
       dockerfile: Dockerfile
     container_name: ai-assessment-frontend
     ports:
-      - "5173:5173"
+      - "3000:3000"
     environment:
       - VITE_API_URL=http://localhost:8000
+    command: ["npx", "serve", "-s", "dist", "-l", "3000"]
     depends_on:
       - backend
     restart: unless-stopped
 
-# Optional: Named volumes for data persistence
+# Named volumes for data persistence
 volumes:
-  backend-data:
+  mongo-data:
+    driver: local

@@ -24,6 +24,9 @@ backend/uploads/
 dist/
 build/
 *.egg-info/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
 
 # IDE
 .vscode/
@@ -46,3 +49,15 @@ htmlcov/
 
 # Docker cache (optional - keep docker files)
 .docker/
+
+# Debug / scratch scripts (should not be committed)
+reproduce_safeguard_failure.py
+backend/check_db.py
+backend/check_db_debug.py
+backend/check_imports.py
+backend/clear_qbank.py
+backend/test_ai.py
+backend/test_bert_grading.py
+backend/test_results.txt
+backend/startup_log.txt
+backend/temp_requirements.txt

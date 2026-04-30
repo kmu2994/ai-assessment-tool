@@ -1,12 +1,21 @@
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Brain, CheckCircle, Users, Zap, ArrowRight, Sparkles, Moon, Sun } from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
+import { authApi } from "@/lib/api";
 
 const Home = () => {
     const navigate = useNavigate();
     const { theme, toggleTheme } = useTheme();
+    const isAuthed = authApi.isAuthenticated();
+
+    useEffect(() => {
+        if (isAuthed) {
+            navigate("/dashboard", { replace: true });
+        }
+    }, [isAuthed, navigate]);
 
     const features = [
         {
@@ -35,19 +44,25 @@ const Home = () => {
         <div className="min-h-screen bg-background">
             {/* Simple Header */}
             <header className="container mx-auto px-6 py-4 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                    <div className="bg-primary rounded-xl p-2">
+                <Link
+                    to={isAuthed ? "/dashboard" : "/"}
+                    className="flex items-center gap-2 group"
+                    aria-label="Go to Dashboard"
+                >
+                    <div className="bg-primary rounded-xl p-2 group-hover:scale-110 transition-transform">
                         <Brain className="h-6 w-6 text-primary-foreground" />
                     </div>
                     <span className="font-bold text-xl">AI Assessment</span>
-                </div>
+                </Link>
                 <div className="flex items-center gap-2">
                     <Button variant="ghost" size="icon" onClick={toggleTheme}>
                         {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                     </Button>
-                    <Button variant="outline" onClick={() => navigate("/login")}>
-                        Login
-                    </Button>
+                    {!isAuthed && (
+                        <Button variant="outline" onClick={() => navigate("/login")}>
+                            Login
+                        </Button>
+                    )}
                 </div>
             </header>
 
@@ -76,20 +91,13 @@ const Home = () => {
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
                             <Button
                                 size="lg"
-                                onClick={() => navigate("/login")}
+                                onClick={() => navigate(isAuthed ? "/dashboard" : "/login?mode=signup")}
                                 className="text-lg gap-2 shadow-lg hover:shadow-xl transition-shadow"
                             >
-                                Get Started
+                                {isAuthed ? "Go to Dashboard" : "Get Started"}
                                 <ArrowRight className="h-5 w-5" aria-hidden="true" />
                             </Button>
-                            <Button
-                                size="lg"
-                                variant="outline"
-                                onClick={() => navigate("/login")}
-                                className="text-lg"
-                            >
-                                View Demo
-                            </Button>
+
                         </div>
                     </div>
                 </div>
@@ -157,10 +165,10 @@ const Home = () => {
 
                                 <Button
                                     size="lg"
-                                    onClick={() => navigate("/login")}
+                                    onClick={() => navigate(isAuthed ? "/dashboard" : "/login")}
                                     className="gap-2 mt-6"
                                 >
-                                    Start Your Assessment
+                                    {isAuthed ? "Go to Dashboard" : "Start Your Assessment"}
                                     <ArrowRight className="h-5 w-5" aria-hidden="true" />
                                 </Button>
                             </div>
@@ -189,9 +197,7 @@ const Home = () => {
                         </div>
                     </div>
                 </div>
-            </section>
-
-            {/* CTA Section */}
+            </section>            {/* CTA Section */}
             <section className="py-20 bg-gradient-to-r from-primary to-accent text-primary-foreground">
                 <div className="container mx-auto px-6 text-center space-y-8">
                     <h2 className="text-4xl md:text-5xl font-bold">
@@ -200,17 +206,6 @@ const Home = () => {
                     <p className="text-xl opacity-90 max-w-2xl mx-auto">
                         Join organizations using AI-driven inclusive assessment
                     </p>
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                        <Button
-                            size="lg"
-                            variant="secondary"
-                            onClick={() => navigate("/login")}
-                            className="text-lg gap-2"
-                        >
-                            Get Started Free
-                            <ArrowRight className="h-5 w-5" aria-hidden="true" />
-                        </Button>
-                    </div>
                 </div>
             </section>
 

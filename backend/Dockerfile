@@ -8,9 +8,12 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install system dependencies
+# Install system dependencies (including Tesseract OCR for handwriting recognition)
 RUN apt-get update && apt-get install -y \
     gcc \
+    tesseract-ocr \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for caching
@@ -23,8 +26,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
-# Create data directory for SQLite
-RUN mkdir -p /app/data
+# Create data directories
+RUN mkdir -p /app/data /app/uploads
 
 # Expose port
 EXPOSE 8000

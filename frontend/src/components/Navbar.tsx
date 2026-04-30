@@ -5,12 +5,14 @@ import {
     LayoutDashboard,
     FileText,
     Award,
-    Settings,
     LogOut,
     Sun,
     Moon,
     Volume2,
-    Contrast
+    Contrast,
+    ShieldCheck,
+    ClipboardList,
+    UserCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authApi } from "@/lib/api";
@@ -38,7 +40,7 @@ const Navbar = () => {
 
         if (role === 'student') {
             return [
-                ...baseItems,
+                { path: "/student-dashboard", label: "Dashboard", icon: LayoutDashboard },
                 { path: "/exams", label: "Exams", icon: FileText },
                 { path: "/results", label: "Results", icon: Award },
             ];
@@ -46,15 +48,15 @@ const Navbar = () => {
 
         if (role === 'teacher') {
             return [
-                ...baseItems,
-                { path: "/teacher", label: "Teacher Panel", icon: Settings },
+                { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+                { path: "/teacher", label: "Teacher Panel", icon: ClipboardList },
             ];
         }
 
         if (role === 'admin') {
             return [
                 ...baseItems,
-                { path: "/admin", label: "Admin Panel", icon: Settings },
+                { path: "/admin", label: "Admin Panel", icon: ShieldCheck },
             ];
         }
 
@@ -143,6 +145,17 @@ const Navbar = () => {
                                 )}
                             </Button>
                         </div>
+
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => navigate('/settings')}
+                            title="My Settings"
+                            aria-label="Settings"
+                            className={isActive('/settings') ? "bg-primary/10 text-primary" : ""}
+                        >
+                            <UserCircle className="h-5 w-5" />
+                        </Button>
 
                         <Button
                             variant="ghost"

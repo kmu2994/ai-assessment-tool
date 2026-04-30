@@ -1,12 +1,14 @@
 # Antigravity Agents Module
-from .semantic_grader import SemanticGradingAgent
-from .adaptive_engine import AdaptiveMCQAgent
-from .ocr_processor import HandwritingAgent
-from .analytics import AnalyticsAgent
+from .semantic_grader import grading_agent
+from .adaptive_engine import adaptive_agent
+from .ocr_processor import ocr_agent
+from .analytics import analytics_agent
+from .ai_generator import ai_generator
 
 __all__ = [
-    "SemanticGradingAgent",
-    "AdaptiveMCQAgent", 
-    "HandwritingAgent",
-    "AnalyticsAgent"
+    "grading_agent",
+    "adaptive_agent", 
+    "ocr_agent",
+    "analytics_agent",
+    "ai_generator"
 ]

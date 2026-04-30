@@ -27,7 +27,10 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
     (response) => response,
     (error: AxiosError) => {
-        if (error.response?.status === 401) {
+        // Only redirect to login if the error is 401 and it's NOT a login request
+        const isLoginRequest = error.config?.url?.includes('auth/login');
+
+        if (error.response?.status === 401 && !isLoginRequest) {
             // Token expired or invalid - clear storage and redirect
             localStorage.removeItem('accessToken');
             localStorage.removeItem('user');
@@ -65,23 +68,30 @@ export interface RegisterData {
 export interface Exam {
     id: string;
     title: string;
+    subject: string;
     description: string | null;
+    type: 'MCQ' | 'DESCRIPTIVE';
     is_adaptive: boolean;
     duration_minutes: number;
     total_questions: number;
     total_marks: number;
     passing_score: number;
     is_active: boolean;
+    has_submitted: boolean;
     created_at: string;
+    scheduled_at?: string | null;
 }
 
 export interface Question {
-    id: string;
+    id?: string;
     question_text: string;
     question_type: 'mcq' | 'descriptive';
     difficulty: number;
     points: number;
     options: Record<string, string> | null;
+    correct_answer?: string;
+    model_answer?: string;
+    source?: 'MANUAL' | 'AI';
 }
 
 export interface ExamSession {
@@ -90,7 +100,9 @@ export interface ExamSession {
     first_question: Question | null;
     total_questions: number;
     duration_minutes: number;
+    resumed?: boolean;   // true when an in-progress session was resumed
 }
+
 
 export interface GradingResult {
     success: boolean;
@@ -126,6 +138,8 @@ export interface StudentAnalytics {
         id: string;
         exam_title: string;
         percentage: number;
+        total_score: number;
+        max_score: number;
         submitted_at: string;
     }>;
 }
@@ -137,6 +151,10 @@ export interface TeacherDashboard {
         id: string;
         title: string;
         is_active: boolean;
+        is_adaptive: boolean;
+        questions_count: number;
+        total_questions: number;
+        submissions_count: number;
     }>;
     student_submissions: Array<{
         id: string;
@@ -145,6 +163,12 @@ export interface TeacherDashboard {
         exam_title: string;
         percentage: number;
         submitted_at: string | null;
+    }>;
+    activity_data: Array<{
+        day: string;
+        users: number;
+        assessments: number;
+        submissions: number;
     }>;
 }
 
@@ -157,6 +181,7 @@ export interface SubmissionDetail {
     max_score: number;
     percentage: number;
     is_finalized: boolean;
+    submitted_at?: string;
     teacher_remarks: string | null;
     answers: Array<{
         answer_id: string;
@@ -194,25 +219,54 @@ export interface AdminDashboard {
         teachers: number;
         admins: number;
     };
+    accessibility_metrics: {
+        enabled_count: number;
+        total_users: number;
+        usage_percentage: number;
+    };
+    system_status: {
+        database: string;
+        api_server: string;
+        latency_ms: number;
+        uptime: string;
+    };
+    recent_violations: Array<{
+        user: string;
+        exam: string;
+        event: string;
+        timestamp: string;
+    }>;
+    activity_data: Array<{
+        day: string;
+        users: number;
+        assessments: number;
+        submissions: number;
+    }>;
 }
 
 export interface QuestionCreate {
     question_text: string;
-    question_type?: string;
-    difficulty?: number;
-    points?: number;
-    options?: Record<string, string>;
+    question_type: string;
+    difficulty: number;
+    points: number;
+    options: Record<string, string> | null;
     correct_answer?: string;
     model_answer?: string;
+    source?: string;
 }
 
 export interface ExamCreate {
     title: string;
+    subject: string;
     description?: string;
+    type: string;
+    is_active?: boolean;
     is_adaptive?: boolean;
     duration_minutes?: number;
+    total_questions?: number;
     total_marks?: number;
     passing_score?: number;
+    scheduled_at?: string;
     questions: QuestionCreate[];
 }
 
@@ -256,7 +310,7 @@ export const authApi = {
     },
 
     isAuthenticated: (): boolean => {
-        return !!localStorage.getItem('accessToken');
+        return !!localStorage.getItem('accessToken') && !!localStorage.getItem('user');
     },
 
     // Admin only
@@ -345,6 +399,33 @@ export const examsApi = {
     reviewSubmission: async (data: SubmissionReview): Promise<void> => {
         await apiClient.post('/exams/review', data);
     },
+
+    extractText: async (file: File): Promise<{ text: string, filename: string }> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await apiClient.post('/exams/extract-text', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+
+    generateAIQuestions: async (data: { text: string, type: string, count: number, difficulty: string, total_marks?: number }): Promise<Question[]> => {
+        const response = await apiClient.post<Question[]>('/exams/generate-questions', data);
+        return response.data;
+    },
+
+    logProctorEvent: async (submissionId: string, eventType: string, details: string): Promise<void> => {
+        await apiClient.post(`/exams/${submissionId}/proctor/event`, {
+            event_type: eventType,
+            details: details,
+            timestamp: new Date().toISOString()
+        });
+    },
+
+    toggleExamStatus: async (examId: string): Promise<{ id: string, is_active: boolean }> => {
+        const response = await apiClient.post(`exams/${examId}/toggle-status`);
+        return response.data;
+    }
 };
 
 // Analytics API
@@ -368,6 +449,38 @@ export const analyticsApi = {
         const response = await apiClient.get<AdminDashboard>('/analytics/dashboard/admin');
         return response.data;
     },
+};
+
+// Question Bank API
+export const questionBankApi = {
+    save: async (questionData: {
+        question_text: string;
+        question_type: string;
+        subject?: string;
+        topic?: string;
+        difficulty?: string;
+        points?: number;
+        options?: Record<string, string> | null;
+        correct_answer?: string;
+        model_answer?: string;
+    }) => {
+        const response = await apiClient.post('/exams/question-bank/save', questionData);
+        return response.data;
+    },
+
+    list: async (filters?: { subject?: string; difficulty?: string; question_type?: string }) => {
+        const params = new URLSearchParams();
+        if (filters?.subject) params.append('subject', filters.subject);
+        if (filters?.difficulty) params.append('difficulty', filters.difficulty);
+        if (filters?.question_type) params.append('question_type', filters.question_type);
+        const response = await apiClient.get(`/exams/question-bank?${params.toString()}`);
+        return response.data;
+    },
+
+    delete: async (questionId: string) => {
+        const response = await apiClient.delete(`/exams/question-bank/${questionId}`);
+        return response.data;
+    }
 };
 
 export default apiClient;

@@ -18,7 +18,9 @@ const CreateExamModal = ({ onClose, onSuccess }: CreateExamModalProps) => {
     const [isLoading, setIsLoading] = useState(false);
     const [examData, setExamData] = useState<ExamCreate>({
         title: "",
+        subject: "",
         description: "",
+        type: "MCQ",
         is_adaptive: true,
         duration_minutes: 60,
         total_marks: 100,
@@ -125,6 +127,8 @@ const CreateExamModal = ({ onClose, onSuccess }: CreateExamModalProps) => {
                                 type="number"
                                 value={examData.duration_minutes}
                                 onChange={(e) => setExamData(prev => ({ ...prev, duration_minutes: Number(e.target.value) }))}
+                                onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                                onKeyDown={(e) => (e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.preventDefault()}
                             />
                         </div>
                         <div className="space-y-2 md:col-span-2">
@@ -153,6 +157,8 @@ const CreateExamModal = ({ onClose, onSuccess }: CreateExamModalProps) => {
                                 type="number"
                                 value={examData.passing_score}
                                 onChange={(e) => setExamData(prev => ({ ...prev, passing_score: Number(e.target.value) }))}
+                                onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                                onKeyDown={(e) => (e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.preventDefault()}
                             />
                         </div>
                     </div>
@@ -209,6 +215,8 @@ const CreateExamModal = ({ onClose, onSuccess }: CreateExamModalProps) => {
                                     max="1"
                                     value={newQuestion.difficulty}
                                     onChange={(e) => setNewQuestion(prev => ({ ...prev, difficulty: Number(e.target.value) }))}
+                                    onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                                    onKeyDown={(e) => (e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.preventDefault()}
                                 />
                             </div>
                             <div className="space-y-2">
@@ -218,6 +226,8 @@ const CreateExamModal = ({ onClose, onSuccess }: CreateExamModalProps) => {
                                     min="1"
                                     value={newQuestion.points}
                                     onChange={(e) => setNewQuestion(prev => ({ ...prev, points: Number(e.target.value) }))}
+                                    onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                                    onKeyDown={(e) => (e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.preventDefault()}
                                 />
                             </div>
                         </div>

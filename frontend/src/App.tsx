@@ -7,7 +7,6 @@ import { authApi } from "@/lib/api";
 // Pages
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
-import StudentDashboard from "@/pages/StudentDashboard";
 import ExamsList from "@/pages/ExamsList";
 import Exam from "@/pages/Exam";
 import Results from "@/pages/Results";
@@ -15,6 +14,9 @@ import ViewDetailedResult from "@/pages/ViewDetailedResult";
 import TeacherDashboard from "@/pages/TeacherDashboard";
 import ReviewSubmission from "@/pages/ReviewSubmission";
 import AdminPanel from "@/pages/AdminPanel";
+import ProfileSettings from "@/pages/ProfileSettings";
+import UnifiedDashboard from "@/pages/UnifiedDashboard";
+import StudentDashboard from "@/pages/StudentDashboard";
 import NotFound from "@/pages/NotFound";
 
 // Protected Route Component
@@ -27,9 +29,7 @@ const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode;
   }
 
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-    // Redirect to appropriate dashboard based on role
-    if (user.role === 'admin') return <Navigate to="/admin" replace />;
-    if (user.role === 'teacher') return <Navigate to="/teacher" replace />;
+    // Redirect to unified dashboard for the user's actual role
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -49,6 +49,14 @@ function App() {
             {/* Student Routes */}
             <Route
               path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <UnifiedDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/student-dashboard"
               element={
                 <ProtectedRoute allowedRoles={['student']}>
                   <StudentDashboard />
@@ -112,6 +120,16 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <AdminPanel />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* General Routes */}
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <ProfileSettings />
                 </ProtectedRoute>
               }
             />

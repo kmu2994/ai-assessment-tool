@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,9 +26,14 @@ const Exam = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
-    const [feedback, setFeedback] = useState<GradingResult | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [filePreview, setFilePreview] = useState<string | null>(null);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const isFinishing = useRef(false);
+
+    // FIX: Store recognition instance in a ref to prevent multiple active instances
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recognitionRef = useRef<any>(null);
 
     // Start exam on mount
     useEffect(() => {
@@ -38,6 +43,65 @@ const Exam = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [examId]);
 
+    // Cleanup speech recognition on unmount to prevent resource leaks
+    useEffect(() => {
+        return () => {
+            if (recognitionRef.current) {
+                recognitionRef.current.stop();
+                recognitionRef.current = null;
+            }
+        };
+    }, []);
+
+    // Proctoring Logic
+    useEffect(() => {
+        if (!session) return;
+
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                const details = `Tab switched or window minimized at ${new Date().toLocaleTimeString()}`;
+                toast.warning("AI PROCTOR ALERT: Tab switch detected! This activity is being logged.", {
+                    duration: 5000,
+                    style: { backgroundColor: '#fee2e2', color: '#991b1b', border: '1px solid #f87171' }
+                });
+                examsApi.logProctorEvent(session.submission_id, "tab_switch", details);
+            }
+        };
+
+        const handleCopyPaste = (e: ClipboardEvent) => {
+            e.preventDefault();
+            const type = e.type === 'copy' ? 'Copy' : 'Paste';
+            const details = `${type} attempt blocked at ${new Date().toLocaleTimeString()}`;
+            toast.error(`AI PROCTOR ALERT: ${type} is disabled during the exam.`, { duration: 3000 });
+            examsApi.logProctorEvent(session.submission_id, "copy_paste", details);
+        };
+
+        const handleFullscreenChange = () => {
+            const isFull = !!document.fullscreenElement;
+            setIsFullscreen(isFull);
+            if (!isFull) {
+                const details = `User exited full screen mode at ${new Date().toLocaleTimeString()}`;
+                toast.error("AI PROCTOR ALERT: Full screen mode disabled! This activity is being logged.", {
+                    duration: 5000,
+                    style: { backgroundColor: '#fee2e2', color: '#991b1b', border: '1px solid #f87171' }
+                });
+                examsApi.logProctorEvent(session.submission_id, "fullscreen_exit", details);
+            }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        document.addEventListener("copy", handleCopyPaste);
+        document.addEventListener("paste", handleCopyPaste);
+        document.addEventListener("fullscreenchange", handleFullscreenChange);
+
+        return () => {
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            document.removeEventListener("copy", handleCopyPaste);
+            document.removeEventListener("paste", handleCopyPaste);
+            document.removeEventListener("fullscreenchange", handleFullscreenChange);
+        };
+    }, [session]);
+
     // Timer
     useEffect(() => {
         if (timeLeft <= 0) return;
@@ -46,7 +110,7 @@ const Exam = () => {
             setTimeLeft((prev) => {
                 if (prev <= 1) {
                     clearInterval(timer);
-                    handleFinishExam();
+                    if (!isFinishing.current) handleFinishExam();
                     return 0;
                 }
                 return prev - 1;
@@ -71,7 +135,12 @@ const Exam = () => {
             setSession(sessionData);
             setCurrentQuestion(sessionData.first_question);
             setTimeLeft(sessionData.duration_minutes * 60);
-            toast.success("Exam started! Good luck!");
+
+            if (sessionData.resumed) {
+                toast.info("Resuming your previous session.");
+            } else {
+                toast.success("Exam started! Good luck!");
+            }
         } catch (error: unknown) {
             const err = error as { response?: { data?: { detail?: string } } };
             toast.error(err.response?.data?.detail || "Failed to start exam");
@@ -87,51 +156,47 @@ const Exam = () => {
         return `${mins}:${secs.toString().padStart(2, "0")}`;
     };
 
-    const progress = session ? ((questionsAnswered + 1) / session.total_questions) * 100 : 0;
+    // FIX: progress should not add +1 (caused 100% on first question display)
+    const progress = session ? (questionsAnswered / session.total_questions) * 100 : 0;
 
     const handleSubmitAnswer = async () => {
         if (!session || !currentQuestion) return;
 
         const answer = currentQuestion.question_type === 'mcq' ? selectedAnswer : descriptiveAnswer;
 
-        if (!answer.trim()) {
+        if (!selectedFile && !answer.trim()) {
             toast.error("Please provide an answer");
             return;
         }
 
         setIsSubmitting(true);
         try {
-            let result;
+            let result: GradingResult;
             if (selectedFile) {
                 result = await examsApi.uploadAnswer(
                     session.submission_id,
-                    currentQuestion.id,
+                    currentQuestion!.id as string,
                     selectedFile
                 );
             } else {
                 result = await examsApi.submitAnswer(
                     session.submission_id,
-                    currentQuestion.id,
+                    currentQuestion!.id as string,
                     answer
                 );
             }
 
-            setFeedback(result);
             setQuestionsAnswered(prev => prev + 1);
 
-            // Show feedback briefly
-            setTimeout(() => {
-                if (result.exam_complete) {
-                    handleFinishExam();
-                } else if (result.next_question) {
-                    setCurrentQuestion(result.next_question);
-                    setSelectedAnswer("");
-                    setDescriptiveAnswer("");
-                    setSelectedFile(null);
-                    setFilePreview(null);
-                    setFeedback(null);
-                }
-            }, 2000);
+            if (result.exam_complete) {
+                handleFinishExam();
+            } else if (result.next_question) {
+                setCurrentQuestion(result.next_question);
+                setSelectedAnswer("");
+                setDescriptiveAnswer("");
+                setSelectedFile(null);
+                setFilePreview(null);
+            }
 
         } catch (error: unknown) {
             const err = error as { response?: { data?: { detail?: string } } };
@@ -143,13 +208,25 @@ const Exam = () => {
 
     const handleFinishExam = async () => {
         if (!session) return;
+        if (isFinishing.current) return;
+        isFinishing.current = true;
+        setTimeLeft(0);
 
+        // Stop speech recognition if active
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+            recognitionRef.current = null;
+        }
+
+        // Persist result to sessionStorage in case /results page is refreshed
         try {
             const result = await examsApi.finishExam(session.submission_id);
+            sessionStorage.setItem("lastExamResult", JSON.stringify(result));
             toast.success("Exam completed!");
             navigate("/results", { state: { result } });
         } catch {
             toast.error("Failed to finish exam");
+            isFinishing.current = false;
         }
     };
 
@@ -160,8 +237,8 @@ const Exam = () => {
         try {
             const result = await examsApi.submitAnswer(
                 session.submission_id,
-                currentQuestion.id,
-                "" // Empty answer for skip
+                currentQuestion!.id as string,
+                ""
             );
 
             setQuestionsAnswered(prev => prev + 1);
@@ -174,7 +251,6 @@ const Exam = () => {
                 setDescriptiveAnswer("");
                 setSelectedFile(null);
                 setFilePreview(null);
-                setFeedback(null);
             }
         } catch (error: unknown) {
             const err = error as { response?: { data?: { detail?: string } } };
@@ -206,6 +282,7 @@ const Exam = () => {
         setFilePreview(null);
     };
 
+    // FIX: Store recognition in ref and properly call .stop() when toggling off
     const toggleRecording = () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in (window as any))) {
@@ -214,6 +291,11 @@ const Exam = () => {
         }
 
         if (isRecording) {
+            // Stop the existing recognition instance
+            if (recognitionRef.current) {
+                recognitionRef.current.stop();
+                recognitionRef.current = null;
+            }
             setIsRecording(false);
             return;
         }
@@ -236,14 +318,17 @@ const Exam = () => {
 
         recognition.onerror = () => {
             setIsRecording(false);
+            recognitionRef.current = null;
             toast.error("Voice recognition error");
         };
 
         recognition.onend = () => {
             setIsRecording(false);
+            recognitionRef.current = null;
         };
 
         recognition.start();
+        recognitionRef.current = recognition;
         setIsRecording(true);
         toast.success("Listening... Speak your answer");
     };
@@ -329,7 +414,7 @@ const Exam = () => {
                         </Card>
                     </aside>
 
-                    {/* Main Content - Question Display */}
+                    {/* Main Content */}
                     <div className="lg:col-span-3 order-1 lg:order-2 space-y-6">
                         {/* Header */}
                         <div className="bg-card rounded-xl p-5 shadow-sm border">
@@ -343,6 +428,21 @@ const Exam = () => {
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-4">
+                                    <Button
+                                        variant={isFullscreen ? "secondary" : "destructive"}
+                                        size="sm"
+                                        onClick={() => {
+                                            if (!document.fullscreenElement) {
+                                                document.documentElement.requestFullscreen();
+                                            } else {
+                                                document.exitFullscreen();
+                                            }
+                                        }}
+                                        className="gap-2 font-bold animate-pulse"
+                                    >
+                                        <div className={`w-2 h-2 rounded-full ${isFullscreen ? 'bg-success animate-ping' : 'bg-white'}`}></div>
+                                        {isFullscreen ? "AI Monitoring Active" : "Enable Secure Mode"}
+                                    </Button>
                                     <div className="flex items-center gap-2 bg-muted px-4 py-2 rounded-full">
                                         <Clock className="h-4 w-4 text-primary" aria-hidden="true" />
                                         <span
@@ -365,9 +465,10 @@ const Exam = () => {
                             <div className="space-y-2">
                                 <div className="flex justify-between text-xs font-semibold uppercase text-muted-foreground">
                                     <span>Overall Completion</span>
-                                    <span>{Math.round(progress)}%</span>
+                                    <span>{questionsAnswered} / {session?.total_questions || 0}</span>
                                 </div>
-                                <Progress value={progress} className="h-2" aria-label={`Progress: ${Math.round(progress)}%`} />
+                                {/* FIX: progress = answered / total (no +1) */}
+                                <Progress value={progress} className="h-2" aria-label={`Progress: ${questionsAnswered} of ${session?.total_questions} questions answered`} />
                             </div>
                         </div>
 
@@ -380,9 +481,7 @@ const Exam = () => {
                                             <div className="bg-primary text-primary-foreground text-sm font-bold w-8 h-8 rounded-lg flex items-center justify-center">
                                                 {questionsAnswered + 1}
                                             </div>
-                                            <CardTitle className="text-xl">
-                                                Question
-                                            </CardTitle>
+                                            <CardTitle className="text-xl">Question</CardTitle>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className={`text-xs font-bold uppercase tracking-wider px-2 py-1 rounded bg-background border ${getDifficultyColor(currentQuestion.difficulty)}`}>
@@ -525,23 +624,6 @@ const Exam = () => {
                                             )}
                                         </div>
                                     )}
-
-                                    {feedback && (
-                                        <div className={`
-                                            p-5 rounded-2xl border-l-8 animate-slide-in-right
-                                            ${feedback.is_correct ? 'bg-success/10 border-success text-success' : 'bg-warning/10 border-warning text-amber-900 dark:text-amber-500'}
-                                        `}>
-                                            <div className="flex items-center gap-3 mb-2">
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${feedback.is_correct ? 'bg-success text-white' : 'bg-warning text-white'}`}>
-                                                    {feedback.is_correct ? '✓' : '!'}
-                                                </div>
-                                                <p className="font-bold text-lg">
-                                                    {feedback.is_correct ? 'Correct! Well done.' : 'Received Feedback'}
-                                                </p>
-                                            </div>
-                                            <p className="text-base pl-11 italic">{feedback.feedback}</p>
-                                        </div>
-                                    )}
                                 </CardContent>
                                 <div className="p-6 lg:p-8 bg-muted/20 border-t flex flex-col sm:flex-row justify-between items-center gap-4">
                                     <Button
@@ -583,7 +665,7 @@ const Exam = () => {
                             </Card>
                         )}
 
-                        {/* Info Card - Pro Tips */}
+                        {/* Info Card */}
                         <div className="bg-primary/5 rounded-2xl p-6 border-2 border-primary/10 flex items-start gap-5">
                             <div className="bg-primary/20 p-3 rounded-full">
                                 <AlertCircle className="h-6 w-6 text-primary" aria-hidden="true" />

@@ -1,21 +1,25 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
-    ChevronLeft,
-    MessageSquare,
-    BrainCircuit,
-    User,
-    Award,
-    CheckCircle2,
-    Image as ImageIcon,
-    Loader2
+    ChevronLeft, MessageSquare, BrainCircuit, User,
+    Award, CheckCircle2, XCircle, Image as ImageIcon,
+    Loader2, GraduationCap, FileText, Target, Hash
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { examsApi, SubmissionDetail } from "@/lib/api";
 import { toast } from "sonner";
+
+/* ── Grade helper ── */
+const getGrade = (pct: number) => {
+    if (pct >= 90) return { label: 'O',  color: 'text-violet-600', bg: 'bg-violet-50 dark:bg-violet-950/60', border: 'border-violet-300 dark:border-violet-700', bar: 'bg-violet-500' };
+    if (pct >= 80) return { label: 'A+', color: 'text-blue-600',   bg: 'bg-blue-50 dark:bg-blue-950/60',     border: 'border-blue-300 dark:border-blue-700',   bar: 'bg-blue-500' };
+    if (pct >= 70) return { label: 'A',  color: 'text-sky-600',    bg: 'bg-sky-50 dark:bg-sky-950/60',       border: 'border-sky-300 dark:border-sky-700',     bar: 'bg-sky-500' };
+    if (pct >= 60) return { label: 'B+', color: 'text-green-600',  bg: 'bg-green-50 dark:bg-green-950/60',   border: 'border-green-300 dark:border-green-700', bar: 'bg-green-500' };
+    if (pct >= 50) return { label: 'B',  color: 'text-lime-600',   bg: 'bg-lime-50 dark:bg-lime-950/60',     border: 'border-lime-300 dark:border-lime-700',   bar: 'bg-lime-500' };
+    if (pct >= 40) return { label: 'C',  color: 'text-yellow-600', bg: 'bg-yellow-50 dark:bg-yellow-950/60', border: 'border-yellow-300 dark:border-yellow-700',bar: 'bg-yellow-500' };
+    return           { label: 'F',  color: 'text-red-600',    bg: 'bg-red-50 dark:bg-red-950/60',       border: 'border-red-300 dark:border-red-700',     bar: 'bg-red-500' };
+};
 
 const ViewDetailedResult = () => {
     const { submissionId } = useParams<{ submissionId: string }>();
@@ -24,9 +28,7 @@ const ViewDetailedResult = () => {
     const [submission, setSubmission] = useState<SubmissionDetail | null>(null);
 
     useEffect(() => {
-        if (submissionId) {
-            fetchSubmission();
-        }
+        if (submissionId) fetchSubmission();
     }, [submissionId]);
 
     const fetchSubmission = async () => {
@@ -35,7 +37,7 @@ const ViewDetailedResult = () => {
             setSubmission(data);
         } catch {
             toast.error("Failed to load result details");
-            navigate("/dashboard");
+            navigate("/results");
         } finally {
             setIsLoading(false);
         }
@@ -43,10 +45,11 @@ const ViewDetailedResult = () => {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-background">
+            <div className="min-h-screen bg-muted/30">
                 <Navbar />
-                <div className="flex items-center justify-center h-[calc(100vh-80px)]">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <div className="flex flex-col items-center justify-center h-[calc(100vh-80px)] gap-3">
+                    <Loader2 className="h-7 w-7 animate-spin text-primary" />
+                    <p className="text-sm text-muted-foreground font-medium">Loading feedback report...</p>
                 </div>
             </div>
         );
@@ -54,163 +57,263 @@ const ViewDetailedResult = () => {
 
     if (!submission) return null;
 
-    const passed = submission.percentage >= 40;
+    const pct    = Math.round(submission.percentage || 0);
+    const passed = pct >= 40;
+    const grade  = getGrade(pct);
+    const submittedDate = submission.submitted_at
+        ? new Date(submission.submitted_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+        : new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 
     return (
-        <div className="min-h-screen bg-background pb-20">
+        <div className="min-h-screen bg-muted/30 pb-16">
             <Navbar />
 
-            <main className="container mx-auto p-6 max-w-5xl space-y-8 animate-fade-in">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div className="space-y-1">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => navigate("/dashboard")}
-                            className="gap-2 -ml-2 text-muted-foreground"
-                        >
-                            <ChevronLeft className="h-4 w-4" />
-                            Back to Dashboard
-                        </Button>
-                        <h1 className="text-3xl font-bold">Assessment Feedback</h1>
-                        <p className="text-muted-foreground">
-                            {submission.exam_title} • Completed on {new Date().toLocaleDateString()}
-                        </p>
+            <main className="container mx-auto px-4 py-6 max-w-4xl space-y-5 animate-fade-in">
+
+                {/* ── Page Header Banner ── */}
+                <div className="bg-card border rounded-2xl overflow-hidden shadow-sm">
+                    <div className={`px-6 py-5 relative overflow-hidden ${passed
+                        ? 'bg-gradient-to-r from-primary/90 to-primary'
+                        : 'bg-gradient-to-r from-destructive/80 to-destructive/70'}`}
+                    >
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-10">
+                            <div className="w-28 h-28 rounded-full border-[10px] border-white" />
+                        </div>
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+                            <div>
+                                <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mb-1">
+                                    Examination Portal · Feedback Report
+                                </p>
+                                <h1 className="text-xl font-bold text-white flex items-center gap-2 leading-tight">
+                                    <GraduationCap className="h-5 w-5 flex-shrink-0" />
+                                    {submission.exam_title}
+                                </h1>
+                                <p className="text-white/60 text-xs mt-1">
+                                    Submitted on {submittedDate}
+                                </p>
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => navigate("/results")}
+                                className="text-white/80 hover:text-white hover:bg-white/10 gap-2 self-start md:self-auto"
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                                Results
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* ── Score Summary Row ── */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-border">
+                        {/* Score */}
+                        <div className="flex items-center gap-3 px-5 py-4">
+                            <div className="p-2 rounded-lg bg-muted/60">
+                                <Award className="h-4 w-4 text-amber-500" />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Final Score</p>
+                                <p className="text-xl font-black leading-tight">
+                                    {submission.total_score?.toFixed(1) ?? '—'}
+                                    <span className="text-sm font-normal text-muted-foreground"> / {submission.max_score}</span>
+                                </p>
+                            </div>
+                        </div>
+                        {/* Percentage */}
+                        <div className="flex items-center gap-3 px-5 py-4">
+                            <div className="p-2 rounded-lg bg-muted/60">
+                                <Target className="h-4 w-4 text-blue-600" />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Percentage</p>
+                                <p className="text-xl font-black leading-tight">{pct}%</p>
+                            </div>
+                        </div>
+                        {/* Grade */}
+                        <div className="flex items-center gap-3 px-5 py-4">
+                            <div className="p-2 rounded-lg bg-muted/60">
+                                <FileText className="h-4 w-4 text-violet-600" />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Grade</p>
+                                <span className={`text-xl font-black ${grade.color}`}>{grade.label}</span>
+                            </div>
+                        </div>
+                        {/* Result */}
+                        <div className="flex items-center gap-3 px-5 py-4">
+                            <div className="p-2 rounded-lg bg-muted/60">
+                                {passed
+                                    ? <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                    : <XCircle className="h-4 w-4 text-red-600" />
+                                }
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Result</p>
+                                <span className={`text-sm font-black ${passed ? 'text-green-600' : 'text-red-600'}`}>
+                                    {passed ? 'PASSED' : 'FAILED'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ── Score Progress Bar ── */}
+                    <div className="px-5 py-3 border-t bg-muted/10">
+                        <div className="flex items-center justify-between text-[10px] font-semibold text-muted-foreground mb-1.5">
+                            <span>Score Progress</span>
+                            <span>{pct}% · Passing threshold: 40%</span>
+                        </div>
+                        <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden relative">
+                            {/* Passing line */}
+                            <div className="absolute top-0 bottom-0 w-px bg-foreground/20 z-10" style={{ left: '40%' }} />
+                            <div
+                                className={`h-full rounded-full transition-all duration-1000 ${grade.bar}`}
+                                style={{ width: `${pct}%` }}
+                            />
+                        </div>
                     </div>
                 </div>
 
-                {/* Score Summary Card */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <Card className={`md:col-span-2 border-2 ${passed ? 'border-success/20 bg-success/5' : 'border-warning/20 bg-warning/5'}`}>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-xl flex items-center gap-2">
-                                <Award className={`h-6 w-6 ${passed ? 'text-success' : 'text-warning'}`} />
-                                Final Evaluation
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex justify-between items-center">
-                                <div>
-                                    <h2 className="text-5xl font-black">{submission.percentage.toFixed(1)}%</h2>
-                                    <p className="text-muted-foreground mt-1">Total Score: {submission.total_score} / {submission.max_score}</p>
-                                </div>
-                                <Badge className={`text-lg px-6 py-2 rounded-full ${passed ? 'bg-success hover:bg-success/90' : 'bg-destructive'}`}>
-                                    {passed ? "PASSED" : "NEEDS IMPROVEMENT"}
-                                </Badge>
-                            </div>
-                        </CardContent>
-                    </Card>
+                {/* ── Teacher Remarks (if any) ── */}
+                {submission.teacher_remarks && (
+                    <div className="bg-card border rounded-2xl p-5 shadow-sm flex items-start gap-4">
+                        <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                            <MessageSquare className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">
+                                Teacher's Overall Remarks
+                            </p>
+                            <p className="text-sm text-foreground leading-relaxed italic">
+                                "{submission.teacher_remarks}"
+                            </p>
+                        </div>
+                    </div>
+                )}
 
-                    <Card className="bg-primary/5 border-primary/20">
-                        <CardHeader className="pb-3 border-b border-primary/10">
-                            <CardTitle className="text-sm font-bold uppercase tracking-wider text-primary">Teacher's Remarks</CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-4">
-                            <div className="flex gap-3">
-                                <MessageSquare className="h-5 w-5 text-primary shrink-0 mt-1" />
-                                <p className="text-foreground italic leading-relaxed">
-                                    {submission.teacher_remarks || "No overall remarks provided."}
-                                </p>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                {/* ── Question-by-Question Breakdown ── */}
+                <div className="bg-card border rounded-2xl overflow-hidden shadow-sm">
+                    {/* Section header */}
+                    <div className="px-5 py-3 bg-muted/50 border-b flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-primary" />
+                        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                            Detailed Answer Breakdown · {submission.answers.length} Question{submission.answers.length !== 1 ? 's' : ''}
+                        </p>
+                    </div>
 
-                {/* Question Breakdown */}
-                <div className="space-y-6">
-                    <h3 className="text-xl font-bold flex items-center gap-2 px-1">
-                        <CheckCircle2 className="h-6 w-6 text-primary" />
-                        Detailed Answer Breakdown
-                    </h3>
+                    <div className="divide-y divide-border">
+                        {submission.answers.map((ans, idx) => {
+                            const qPct   = ans.max_points > 0 ? Math.round((ans.current_score / ans.max_points) * 100) : 0;
+                            const qGrade = getGrade(qPct);
+                            return (
+                                <div key={ans.answer_id} className="p-5 space-y-4">
 
-                    {submission.answers.map((ans, idx) => (
-                        <Card key={ans.answer_id} className="overflow-hidden border-2 rounded-xl">
-                            <div className="p-4 bg-muted/30 border-b flex justify-between items-center">
-                                <div className="flex items-center gap-3">
-                                    <span className="bg-background text-foreground font-bold h-7 w-7 rounded-md flex items-center justify-center border text-sm">
-                                        Q{idx + 1}
-                                    </span>
-                                    <span className="text-sm font-semibold opacity-70">Descriptive Answer</span>
-                                </div>
-                                <div className="text-right">
-                                    <span className="text-lg font-black text-primary">{ans.current_score}</span>
-                                    <span className="text-sm text-muted-foreground ml-1">/ {ans.max_points}</span>
-                                </div>
-                            </div>
-
-                            <CardContent className="p-6 space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    {/* Student Response Section */}
-                                    <div className="space-y-4">
-                                        <div>
-                                            <Label className="text-xs text-muted-foreground uppercase font-bold mb-2 block">Question</Label>
-                                            <p className="font-semibold">{ans.question_text}</p>
+                                    {/* ── Q header ── */}
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <span className="flex-shrink-0 w-8 h-8 rounded-lg bg-primary/10 text-primary text-xs font-black flex items-center justify-center border border-primary/20">
+                                                {idx + 1}
+                                            </span>
+                                            <div>
+                                                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                                                    <Hash className="h-3 w-3" />
+                                                    Question {idx + 1}
+                                                </p>
+                                                <p className="text-sm font-semibold text-foreground leading-snug mt-0.5">
+                                                    {ans.question_text}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div className="p-5 bg-primary/5 rounded-2xl border-2 border-primary/10 relative">
-                                            <Label className="text-[10px] text-primary uppercase font-bold flex items-center gap-2 mb-2">
+                                        <div className="flex-shrink-0 flex flex-col items-end gap-1">
+                                            <span className={`text-sm font-black px-3 py-1 rounded-lg border ${qGrade.bg} ${qGrade.color} ${qGrade.border}`}>
+                                                {ans.current_score} / {ans.max_points}
+                                            </span>
+                                            <span className="text-[10px] text-muted-foreground font-semibold">{qPct}%</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Per-question progress bar */}
+                                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full ${qGrade.bar}`}
+                                            style={{ width: `${qPct}%` }}
+                                        />
+                                    </div>
+
+                                    {/* ── Answer + Feedback grid ── */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                                        {/* Student's answer */}
+                                        <div className={`rounded-xl border p-4 space-y-2 ${qGrade.bg} ${qGrade.border}`}>
+                                            <p className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 text-muted-foreground">
                                                 <User className="h-3 w-3" />
                                                 Your Response
-                                            </Label>
-                                            <p className="text-foreground leading-relaxed">
-                                                {ans.student_answer || <span className="text-muted-foreground italic">No answer submitted</span>}
                                             </p>
+                                            <p className="text-sm text-foreground leading-relaxed">
+                                                {ans.student_answer || (
+                                                    <span className="italic text-muted-foreground">No answer submitted</span>
+                                                )}
+                                            </p>
+                                            {/* Uploaded image */}
                                             {ans.image_url && (
-                                                <div className="mt-4 pt-4 border-t border-primary/10">
-                                                    <Label className="text-[10px] text-muted-foreground uppercase font-bold flex items-center gap-1 mb-2">
+                                                <div className="mt-3 pt-3 border-t border-current/10">
+                                                    <p className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 text-muted-foreground mb-2">
                                                         <ImageIcon className="h-3 w-3" />
-                                                        Original Uploaded Image
-                                                    </Label>
-                                                    <div className="rounded-lg overflow-hidden border bg-white group relative">
+                                                        Uploaded Image
+                                                    </p>
+                                                    <div
+                                                        className="rounded-lg overflow-hidden border bg-white group cursor-zoom-in"
+                                                        onClick={() => window.open(ans.image_url!, '_blank')}
+                                                    >
                                                         <img
                                                             src={ans.image_url}
-                                                            alt="Handwritten Answer"
-                                                            className="w-full h-auto max-h-[250px] object-contain group-hover:scale-105 transition-transform duration-500"
+                                                            alt="Handwritten answer"
+                                                            className="w-full h-auto max-h-48 object-contain group-hover:scale-105 transition-transform duration-500"
                                                         />
-                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-zoom-in" onClick={() => window.open(ans.image_url!, '_blank')}>
-                                                            <span className="text-white font-bold text-xs uppercase tracking-widest">View Full Size</span>
-                                                        </div>
                                                     </div>
                                                 </div>
                                             )}
                                         </div>
-                                    </div>
 
-                                    {/* Analysis & Feedback Section */}
-                                    <div className="space-y-6">
-                                        <div className="p-5 rounded-2xl bg-accent/5 border border-accent/20">
-                                            <Label className="text-[10px] text-accent uppercase font-bold flex items-center gap-2 mb-3">
-                                                <BrainCircuit className="h-4 w-4" />
-                                                AI Smart Feedback
-                                            </Label>
-                                            <p className="text-sm italic leading-relaxed text-foreground/80">
-                                                "{ans.feedback}"
-                                            </p>
-                                        </div>
+                                        {/* Feedback column */}
+                                        <div className="space-y-3">
+                                            {/* AI feedback */}
+                                            <div className="rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/40 p-4">
+                                                <p className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 text-violet-600 dark:text-violet-400 mb-2">
+                                                    <BrainCircuit className="h-3.5 w-3.5" />
+                                                    AI Feedback
+                                                </p>
+                                                <p className="text-sm text-foreground/80 leading-relaxed italic">
+                                                    "{ans.feedback || 'No AI feedback available for this answer.'}"
+                                                </p>
+                                            </div>
 
-                                        <div className="p-5 rounded-2xl bg-primary/5 border border-primary/20">
-                                            <Label className="text-[10px] text-primary uppercase font-bold flex items-center gap-2 mb-3">
-                                                <MessageSquare className="h-4 w-4" />
-                                                Teacher's Specific Remarks
-                                            </Label>
-                                            <p className="text-sm leading-relaxed text-foreground">
-                                                {ans.teacher_remarks || "No specific remarks for this question."}
-                                            </p>
+                                            {/* Teacher remark */}
+                                            <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 p-4">
+                                                <p className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 text-blue-600 dark:text-blue-400 mb-2">
+                                                    <MessageSquare className="h-3.5 w-3.5" />
+                                                    Teacher's Remark
+                                                </p>
+                                                <p className="text-sm text-foreground leading-relaxed">
+                                                    {ans.teacher_remarks || 'No specific remarks for this question.'}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </CardContent>
-                        </Card>
-                    ))}
+                            );
+                        })}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="px-5 py-3 bg-muted/20 border-t text-[10px] text-muted-foreground flex items-center gap-2">
+                        <BrainCircuit className="h-3 w-3" />
+                        AI feedback is generated automatically based on semantic similarity to model answers.
+                    </div>
                 </div>
+
             </main>
         </div>
     );
 };
-
-// Simple Label component if not imported from UI
-const Label = ({ children, className }: { children: React.ReactNode, className?: string }) => (
-    <label className={className}>{children}</label>
-);
 
 export default ViewDetailedResult;

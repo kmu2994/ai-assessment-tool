@@ -226,6 +226,8 @@ const ReviewSubmission = () => {
                                             className="w-20 h-8 text-center font-bold"
                                             value={review.answer_reviews.find(r => r.answer_id === ans.answer_id)?.modified_score}
                                             onChange={(e) => handleScoreChange(ans.answer_id, Number(e.target.value))}
+                                            onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                                            onKeyDown={(e) => (e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.preventDefault()}
                                             max={ans.max_points}
                                             min={0}
                                         />

@@ -21,13 +21,13 @@ async def connect_db():
     global client
     
     # Import models here to avoid circular imports
-    from app.db.models import User, Exam, Question, Submission, Answer
+    from app.db.models import User, Exam, Question, Submission, Answer, QuestionBank
     
     client = AsyncIOMotorClient(MONGODB_URL)
     
     await init_beanie(
         database=client[DATABASE_NAME],
-        document_models=[User, Exam, Question, Submission, Answer]
+        document_models=[User, Exam, Question, Submission, Answer, QuestionBank]
     )
     
     print(f"Connected to MongoDB: {DATABASE_NAME}")
