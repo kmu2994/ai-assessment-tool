@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import {
     Pencil, Trash2, Sparkles, AlertCircle, ScrollText, Target, Library,
 } from "lucide-react";
-import { questionBankApi } from "@/lib/api";
+import { questionBankApi, Question } from "@/lib/api";
 import QuestionEditor from "./QuestionEditor";
 import AIGenerationPanel from "./AIGenerationPanel";
 import QuestionBankPanel from "./QuestionBankPanel";
@@ -168,8 +168,8 @@ const StepQuestions = ({
                             try {
                                 const questions = await questionBankApi.list();
                                 bankProps.setBankQuestions(questions);
-                                const subjects = [...new Set(questions.map((q: any) => q.subject).filter(Boolean))] as string[];
-                                const topics = [...new Set(questions.map((q: any) => q.topic).filter(Boolean))] as string[];
+                                const subjects = [...new Set(questions.map((q: Question) => q.subject).filter(Boolean))] as string[];
+                                const topics = [...new Set(questions.map((q: Question) => q.topic).filter(Boolean))] as string[];
                                 bankProps.setAvailableSubjects(subjects);
                                 bankProps.setAvailableTopics(topics);
                             } catch (e) {

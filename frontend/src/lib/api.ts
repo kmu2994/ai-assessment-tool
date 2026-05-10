@@ -92,6 +92,8 @@ export interface Question {
     correct_answer?: string;
     model_answer?: string;
     source?: 'MANUAL' | 'AI';
+    subject?: string;
+    topic?: string;
 }
 
 export interface ExamSession {

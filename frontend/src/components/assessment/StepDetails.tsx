@@ -30,7 +30,7 @@ const StepDetails = ({ examData, setExamData }: StepDetailsProps) => {
         const formattedMinute = selectionMinute.padStart(2, "0");
         const isoString = `${selectionDate}T${formattedHour}:${formattedMinute}`;
         setExamData((prev) => ({ ...prev, scheduled_at: isoString }));
-    }, [selectionDate, selectionHour, selectionMinute, selectionAMPM]);
+    }, [selectionDate, selectionHour, selectionMinute, selectionAMPM, setExamData]);
 
     const formatTo12Hr = (dateStr?: string) => {
         if (!dateStr) return "";

@@ -56,7 +56,7 @@ const TeacherDashboard = () => {
             await examsApi.toggleExamStatus(examId);
             toast.success("Assessment status updated");
             fetchDashboard();
-        } catch (error) {
+        } catch {
             toast.error("Failed to update status");
         }
     };

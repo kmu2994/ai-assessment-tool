@@ -41,8 +41,8 @@ export interface AIGenerationPanelProps {
 export interface QuestionBankPanelProps {
     examData: ExamCreate;
     setExamData: React.Dispatch<React.SetStateAction<ExamCreate>>;
-    bankQuestions: any[];
-    setBankQuestions: React.Dispatch<React.SetStateAction<any[]>>;
+    bankQuestions: Question[];
+    setBankQuestions: React.Dispatch<React.SetStateAction<Question[]>>;
     selectedBankIndices: number[];
     setSelectedBankIndices: React.Dispatch<React.SetStateAction<number[]>>;
     isLoadingBank: boolean;

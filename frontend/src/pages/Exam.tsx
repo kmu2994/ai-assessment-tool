@@ -375,7 +375,7 @@ const Exam = () => {
 
         // Snapshot the answer text before we start so we can
         // replace only the "in-progress" portion on each event.
-        let baseText = descriptiveAnswer;
+        const baseText = descriptiveAnswer;
         let committedFromSpeech = '';   // final results accumulated this session
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

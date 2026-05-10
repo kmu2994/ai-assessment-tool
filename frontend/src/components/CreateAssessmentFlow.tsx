@@ -55,7 +55,7 @@ const CreateAssessmentFlow = ({ onClose, onSuccess }: CreateAssessmentFlowProps)
     const [saveBankTopic, setSaveBankTopic] = useState("");
 
     // Question Bank State
-    const [bankQuestions, setBankQuestions] = useState<any[]>([]);
+    const [bankQuestions, setBankQuestions] = useState<Question[]>([]);
     const [selectedBankIndices, setSelectedBankIndices] = useState<number[]>([]);
     const [isLoadingBank] = useState(false);
     const [bankFilter, setBankFilter] = useState({ subject: "", topic: "" });

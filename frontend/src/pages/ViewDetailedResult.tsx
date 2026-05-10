@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,11 +27,7 @@ const ViewDetailedResult = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [submission, setSubmission] = useState<SubmissionDetail | null>(null);
 
-    useEffect(() => {
-        if (submissionId) fetchSubmission();
-    }, [submissionId]);
-
-    const fetchSubmission = async () => {
+    const fetchSubmission = useCallback(async () => {
         try {
             const data = await examsApi.getSubmission(submissionId!);
             setSubmission(data);
@@ -41,7 +37,12 @@ const ViewDetailedResult = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [submissionId]);
+
+    useEffect(() => {
+        if (submissionId) fetchSubmission();
+    }, [submissionId, fetchSubmission]);
 
     if (isLoading) {
         return (

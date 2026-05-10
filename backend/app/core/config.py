@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # Google Gemini API
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.0-flash-lite"
-    GEMINI_MODELS: str = "gemini-2.0-flash-lite,gemini-1.5-flash,gemini-2.0-flash"
+    GEMINI_MODELS: str = "gemini-2.5-flash-lite,gemini-2.0-flash-lite,gemini-2.0-flash"
 
     # NVIDIA NIM API
     NVIDIA_API_KEY: str = ""
