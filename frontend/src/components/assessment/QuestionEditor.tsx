@@ -30,8 +30,42 @@ const QuestionEditor = ({
                     <div className="h-5 w-5 rounded-lg bg-primary/20 flex items-center justify-center">
                         <PenTool className="h-3 w-3" />
                     </div>
-                    Current Question: {examType}
+                    Current Question: {examType === 'BOTH' ? newQuestion.question_type.toUpperCase() : examType}
                 </div>
+                {examType === 'BOTH' && (
+                    <div className="flex bg-muted/30 p-0.5 rounded-lg">
+                        <Button
+                            variant={newQuestion.question_type === 'mcq' ? 'default' : 'ghost'}
+                            size="sm"
+                            className="h-6 text-[10px] font-bold px-3 rounded-md"
+                            onClick={() => setNewQuestion({
+                                ...newQuestion,
+                                question_type: 'mcq',
+                                options: { A: '', B: '', C: '', D: '' },
+                                correct_answer: '',
+                                model_answer: '',
+                            })}
+                            type="button"
+                        >
+                            MCQ
+                        </Button>
+                        <Button
+                            variant={newQuestion.question_type === 'descriptive' ? 'default' : 'ghost'}
+                            size="sm"
+                            className="h-6 text-[10px] font-bold px-3 rounded-md"
+                            onClick={() => setNewQuestion({
+                                ...newQuestion,
+                                question_type: 'descriptive',
+                                options: null,
+                                correct_answer: '',
+                                model_answer: '',
+                            })}
+                            type="button"
+                        >
+                            Descriptive
+                        </Button>
+                    </div>
+                )}
                 {editingIdx !== null && (
                     <div className="text-[10px] bg-warning/20 text-warning px-2 py-0.5 rounded-full font-bold uppercase">
                         Editing Q{editingIdx + 1}
@@ -39,7 +73,7 @@ const QuestionEditor = ({
                 )}
             </div>
 
-            {examType === "MCQ" && (
+            {(examType === "MCQ" || (examType === "BOTH" && newQuestion.question_type === "mcq")) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {["A", "B", "C", "D"].map((opt) => (
                         <div key={opt} className="space-y-1.5">
@@ -83,7 +117,7 @@ const QuestionEditor = ({
                 </div>
             )}
 
-            {examType === "DESCRIPTIVE" && (
+            {(examType === "DESCRIPTIVE" || (examType === "BOTH" && newQuestion.question_type === "descriptive")) && (
                 <div className="space-y-2">
                     <Label className="text-xs font-bold uppercase tracking-wider">Model Answer</Label>
                     <Textarea

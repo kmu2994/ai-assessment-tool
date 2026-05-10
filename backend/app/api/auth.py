@@ -6,8 +6,9 @@ from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
 from typing import List
 from beanie import PydanticObjectId
+from beanie.operators import In
 
-from app.db.models import User, UserRole
+from app.db.models import User, UserRole, Exam, Question, Submission, Answer
 from app.core.security import verify_password, get_password_hash, create_access_token, decode_token, oauth2_scheme
 from app.core.config import settings
 from .schemas import UserCreate, UserLogin, UserResponse, Token
@@ -196,7 +197,7 @@ async def delete_user(
     user_id: str,
     admin: User = Depends(require_role(["admin"])),
 ):
-    """Delete a user (Admin only)."""
+    """Delete a user and ALL associated records — cascade delete (Admin only)."""
     user = await User.get(PydanticObjectId(user_id))
 
     if not user:
@@ -215,5 +216,35 @@ async def delete_user(
                 detail="Cannot delete the last administrator. Promote another user first.",
             )
 
+    uid = user.id
+
+    # ── Cascade delete all associated records ──────────────────────────────
+    # 1. Delete answers for all submissions by this user
+    submissions = await Submission.find(Submission.user_id == uid).to_list()
+    submission_ids = [s.id for s in submissions]
+    if submission_ids:
+        await Answer.find(In(Answer.submission_id, submission_ids)).delete()
+
+    # 2. Delete all submissions by this user
+    await Submission.find(Submission.user_id == uid).delete()
+
+    # 3. If user is a teacher/admin, delete exams they created + cascade
+    exams_created = await Exam.find(Exam.created_by == uid).to_list()
+    for exam in exams_created:
+        # Delete answers for submissions on this exam
+        exam_subs = await Submission.find(Submission.exam_id == exam.id).to_list()
+        exam_sub_ids = [s.id for s in exam_subs]
+        if exam_sub_ids:
+            await Answer.find(In(Answer.submission_id, exam_sub_ids)).delete()
+        await Submission.find(Submission.exam_id == exam.id).delete()
+        await Question.find(Question.exam_id == exam.id).delete()
+        await exam.delete()
+
+    # 4. Delete the user
     await user.delete()
-    return {"message": "User deleted successfully"}
+
+    return {
+        "message": f"User '{user.username}' and all associated records deleted successfully.",
+        "deleted_submissions": len(submissions),
+        "deleted_exams": len(exams_created),
+    }

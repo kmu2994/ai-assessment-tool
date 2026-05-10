@@ -70,7 +70,7 @@ export interface Exam {
     title: string;
     subject: string;
     description: string | null;
-    type: 'MCQ' | 'DESCRIPTIVE';
+    type: 'MCQ' | 'DESCRIPTIVE' | 'BOTH';
     is_adaptive: boolean;
     duration_minutes: number;
     total_questions: number;
@@ -409,8 +409,13 @@ export const examsApi = {
         return response.data;
     },
 
-    generateAIQuestions: async (data: { text: string, type: string, count: number, difficulty: string, total_marks?: number }): Promise<Question[]> => {
+    generateAIQuestions: async (data: { text: string, type: string, count: number, difficulty: string, total_marks?: number, mcq_count?: number, desc_count?: number, provider?: string }): Promise<Question[]> => {
         const response = await apiClient.post<Question[]>('/exams/generate-questions', data);
+        return response.data;
+    },
+
+    getAIProviders: async (): Promise<{ providers: string[] }> => {
+        const response = await apiClient.get<{ providers: string[] }>('/exams/ai-providers');
         return response.data;
     },
 

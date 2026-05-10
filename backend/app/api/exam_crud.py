@@ -40,6 +40,7 @@ async def create_exam(
         total_marks=exam_data.total_marks,
         passing_score=exam_data.passing_score,
         total_questions=exam_data.total_questions or len(exam_data.questions),
+        scheduled_at=exam_data.scheduled_at,
     )
     await exam.insert()
     logger.info(f"Exam '{exam.title}' created (id={exam.id}) by {user.username}.")
@@ -73,6 +74,8 @@ async def create_exam(
         total_questions=exam.total_questions,
         total_marks=exam.total_marks,
         passing_score=exam.passing_score,
+        created_at=exam.created_at,
+        scheduled_at=exam.scheduled_at,
     )
 
 
@@ -90,12 +93,18 @@ async def extract_text_from_file(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/ai-providers")
+async def list_ai_providers(user: User = Depends(require_role(["teacher", "admin"]))):
+    """List available AI providers."""
+    return {"providers": ai_generator.available_providers()}
+
+
 @router.post("/generate-questions", response_model=List[QuestionResponse])
 async def generate_ai_questions(
     request: AIQuestionRequest,
     user: User = Depends(require_role(["teacher", "admin"])),
 ):
-    """Generate questions using Gemini AI."""
+    """Generate questions using the selected AI provider (Gemini or NVIDIA)."""
     try:
         data = await ai_generator.generate_questions(
             text=request.text,
@@ -103,6 +112,9 @@ async def generate_ai_questions(
             count=request.count,
             difficulty=request.difficulty,
             total_marks=request.total_marks,
+            mcq_count=request.mcq_count,
+            desc_count=request.desc_count,
+            provider=request.provider,
         )
         return [QuestionResponse(**q) for q in data]
     except Exception as e:
@@ -135,6 +147,8 @@ async def list_available_exams(user: User = Depends(get_current_user)):
             total_marks=e.total_marks,
             passing_score=e.passing_score,
             has_submitted=str(e.id) in submitted_exam_ids,
+            created_at=e.created_at,
+            scheduled_at=e.scheduled_at,
         )
         for e in exams
     ]
@@ -166,6 +180,8 @@ async def get_exam(exam_id: str, user: User = Depends(get_current_user)):
         total_marks=exam.total_marks,
         passing_score=exam.passing_score,
         has_submitted=submission is not None,
+        created_at=exam.created_at,
+        scheduled_at=exam.scheduled_at,
     )
 
 

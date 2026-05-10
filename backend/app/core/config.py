@@ -27,8 +27,14 @@ class Settings(BaseSettings):
     # AI Models
     SBERT_MODEL: str = "all-MiniLM-L6-v2"
 
-    # Gemini API
+    # Google Gemini API
     GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.0-flash-lite"
+    GEMINI_MODELS: str = "gemini-2.0-flash-lite,gemini-1.5-flash,gemini-2.0-flash"
+
+    # NVIDIA NIM API
+    NVIDIA_API_KEY: str = ""
+    NVIDIA_LLM_MODEL: str = "meta/llama-3.1-70b-instruct"
 
     # File Upload
     UPLOAD_DIR: str = "./data/uploads"

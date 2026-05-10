@@ -1,14 +1,13 @@
 """
-AI Question Generation Agent using Gemini.
+AI Question Generation Agent — Dual Provider (Google Gemini + NVIDIA NIM).
+Gemini supports automatic model fallback when a model is rate-limited.
 """
 import os
 import re
 import json
 import logging
-import warnings
-# Suppress deprecation warning for google.generativeai (still functional)
-warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
-import google.generativeai as genai
+import time
+from openai import OpenAI
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 
@@ -16,10 +15,8 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Maximum characters of user text to send to the AI model
 _MAX_INPUT_CHARS = 4000
 
-# Pattern to strip common prompt-injection attempts
 _INJECTION_PATTERN = re.compile(
     r'(ignore\s+(all\s+)?(previous|prior|above)\s+instructions?|'
     r'disregard\s+.{0,50}instructions?|'
@@ -32,29 +29,59 @@ _INJECTION_PATTERN = re.compile(
 
 
 def _sanitize_input(text: str) -> str:
-    """
-    Strip prompt-injection patterns and limit length.
-    Replaces suspicious phrases with '[REMOVED]' so context is preserved.
-    """
     sanitized = _INJECTION_PATTERN.sub('[REMOVED]', text)
     return sanitized[:_MAX_INPUT_CHARS]
 
 
 class AIGeneratorAgent:
-    def __init__(self):
-        self.api_key = os.getenv("GEMINI_API_KEY", "")
-        if not self.api_key:
-            logger.warning("GEMINI_API_KEY not set — AI question generation will be disabled.")
+    """Dual-provider AI question generator with Gemini model fallback."""
 
-        genai.configure(api_key=self.api_key)
-        self.model_name = 'gemini-2.0-flash'
-        try:
-            self.model = genai.GenerativeModel(self.model_name)
-            logger.info(f"AIGeneratorAgent ({self.model_name}) initialized.")
-        except Exception as e:
-            logger.error(f"Failed to initialize {self.model_name}, falling back to gemini-flash-latest: {e}")
-            self.model_name = 'gemini-flash-latest'
-            self.model = genai.GenerativeModel(self.model_name)
+    def __init__(self):
+        # ── Gemini setup ──────────────────────────────────────────────────────
+        self.gemini_key = os.getenv("GEMINI_API_KEY", "")
+        # Support a comma-separated fallback chain of models
+        models_str = os.getenv("GEMINI_MODELS", "") or os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
+        self.gemini_models = [m.strip() for m in models_str.split(",") if m.strip()]
+        if not self.gemini_models:
+            self.gemini_models = ["gemini-2.0-flash-lite"]
+        self.gemini_client = None
+
+        if self.gemini_key:
+            try:
+                from google import genai
+                self.gemini_client = genai.Client(api_key=self.gemini_key)
+                logger.info(f"Gemini initialized — fallback chain: {self.gemini_models}")
+            except ImportError:
+                logger.error("google-genai package not installed. Run: pip install google-genai")
+            except Exception as e:
+                logger.error(f"Failed to initialize Gemini: {e}")
+        else:
+            logger.warning("GEMINI_API_KEY not set.")
+
+        # ── NVIDIA NIM setup ──────────────────────────────────────────────────
+        self.nvidia_key = os.getenv("NVIDIA_API_KEY", "")
+        self.nvidia_model = os.getenv("NVIDIA_LLM_MODEL", "meta/llama-3.1-70b-instruct")
+        self.nvidia_client = None
+
+        if self.nvidia_key:
+            try:
+                self.nvidia_client = OpenAI(
+                    base_url="https://integrate.api.nvidia.com/v1",
+                    api_key=self.nvidia_key,
+                )
+                logger.info(f"NVIDIA NIM ({self.nvidia_model}) initialized.")
+            except Exception as e:
+                logger.error(f"Failed to initialize NVIDIA: {e}")
+        else:
+            logger.warning("NVIDIA_API_KEY not set.")
+
+    def available_providers(self) -> List[str]:
+        providers = []
+        if self.gemini_client:
+            providers.append("gemini")
+        if self.nvidia_client:
+            providers.append("nvidia")
+        return providers
 
     async def generate_questions(
         self,
@@ -63,49 +90,108 @@ class AIGeneratorAgent:
         count: int = 5,
         difficulty: str = "Medium",
         total_marks: Optional[float] = None,
+        mcq_count: Optional[int] = None,
+        desc_count: Optional[int] = None,
+        provider: str = "gemini",
     ) -> List[Dict[str, Any]]:
-        """Generates questions based on provided text using Gemini."""
-        if not self.api_key:
-            raise RuntimeError("GEMINI_API_KEY is not configured.")
-
-        # ── Sanitize user input ───────────────────────────────────────────────
         safe_text = _sanitize_input(text)
-
         points_per_q = (total_marks / count) if total_marks and count > 0 else None
-        prompt = self._build_prompt(safe_text, question_type, count, difficulty, points_per_q)
+        prompt = self._build_prompt(
+            safe_text, question_type, count, difficulty, points_per_q,
+            mcq_count=mcq_count, desc_count=desc_count,
+        )
 
+        if provider == "nvidia":
+            return await self._generate_nvidia(prompt, question_type, difficulty, points_per_q)
+        else:
+            return await self._generate_gemini(prompt, question_type, difficulty, points_per_q)
+
+    # ── Gemini: tries each model in the fallback chain ─────────────────────────
+    async def _generate_gemini(self, prompt, question_type, difficulty, points_per_q):
+        if not self.gemini_client:
+            raise RuntimeError("Gemini is not configured. Check GEMINI_API_KEY.")
+
+        from google.genai import types
+
+        last_error = None
+        for model_name in self.gemini_models:
+            try:
+                logger.info(f"Trying Gemini model: {model_name}")
+                response = self.gemini_client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.4,
+                        max_output_tokens=8192,
+                        response_mime_type="application/json",
+                        system_instruction=(
+                            "You are an expert examiner and question paper setter. "
+                            "Respond ONLY with a valid JSON array of question objects. "
+                            "No markdown, no explanation — just the JSON array."
+                        ),
+                    ),
+                )
+                raw_text = response.text
+                result = self._parse_response(raw_text, question_type, difficulty, points_per_q)
+                if result:
+                    logger.info(f"Successfully generated {len(result)} questions with {model_name}")
+                    return result
+                else:
+                    logger.warning(f"{model_name} returned unparseable response, trying next model...")
+                    continue
+
+            except Exception as e:
+                error_str = str(e)
+                last_error = e
+                if "429" in error_str or "quota" in error_str.lower() or "RESOURCE_EXHAUSTED" in error_str:
+                    logger.warning(f"{model_name} rate-limited, trying next model...")
+                    continue
+                else:
+                    logger.error(f"{model_name} error: {error_str[:300]}")
+                    # Non-quota error — still try next model
+                    continue
+
+        # All models exhausted
+        error_msg = f"All Gemini models exhausted ({', '.join(self.gemini_models)}). "
+        if self.nvidia_client:
+            error_msg += "Please switch to NVIDIA NIM provider."
+        else:
+            error_msg += "Please wait a few minutes and try again."
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
+
+    # ── NVIDIA generation ──────────────────────────────────────────────────────
+    async def _generate_nvidia(self, prompt, question_type, difficulty, points_per_q):
+        if not self.nvidia_client:
+            raise RuntimeError("NVIDIA NIM is not configured. Check NVIDIA_API_KEY.")
         try:
-            response = self.model.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    response_mime_type="application/json",
-                ),
+            response = self.nvidia_client.chat.completions.create(
+                model=self.nvidia_model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an expert examiner. Respond ONLY with valid JSON. "
+                            "No markdown, no explanation — just the JSON array."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.4,
+                max_tokens=4096,
             )
-            return self._parse_response(response.text, question_type, difficulty, points_per_q)
-
+            raw_text = response.choices[0].message.content
+            result = self._parse_response(raw_text, question_type, difficulty, points_per_q)
+            if not result:
+                raise RuntimeError("NVIDIA returned empty or unparseable response")
+            return result
         except Exception as e:
-            logger.error(f"Error with {self.model_name}: {e}")
-            if self.model_name != 'gemini-flash-latest':
-                logger.info("Retrying with gemini-flash-latest...")
-                try:
-                    fallback_model = genai.GenerativeModel('gemini-flash-latest')
-                    response = fallback_model.generate_content(prompt)
-                    return self._parse_response(response.text, question_type, difficulty, points_per_q)
-                except Exception as fe:
-                    logger.error(f"Fallback to gemini-flash-latest failed: {fe}")
+            logger.error(f"NVIDIA error: {e}")
+            raise RuntimeError(f"NVIDIA generation failed: {str(e)[:200]}")
 
-            return []
-
-    def _parse_response(
-        self,
-        response_text: str,
-        question_type: str,
-        difficulty: str,
-        points_per_q: Optional[float] = None,
-    ) -> List[Dict[str, Any]]:
-        """Parses the AI response and adds metadata."""
+    # ── Response parser ────────────────────────────────────────────────────────
+    def _parse_response(self, response_text, question_type, difficulty, points_per_q=None):
         try:
-            # Clean up response if it has markdown code blocks
             clean_text = response_text.strip()
             if "```json" in clean_text:
                 clean_text = clean_text.split("```json")[1].split("```")[0].strip()
@@ -114,17 +200,13 @@ class AIGeneratorAgent:
 
             questions = json.loads(clean_text)
 
-            # Ensure it's a list
             if isinstance(questions, dict) and "questions" in questions:
                 questions = questions["questions"]
-
             if not isinstance(questions, list):
                 logger.error(f"AI response is not a list: {type(questions)}")
                 return []
 
-            # Add metadata and normalize fields
             for q in questions:
-                # Aliasing for common AI variations
                 if "question" in q and "question_text" not in q:
                     q["question_text"] = q["question"]
                 if "answer" in q and "correct_answer" not in q and question_type.upper() == "MCQ":
@@ -134,93 +216,82 @@ class AIGeneratorAgent:
                 if "explanation" in q and "feedback" not in q:
                     q["feedback"] = q["explanation"]
 
-                q["source"] = "AI"
-                q["question_type"] = question_type.lower()
+                # Map letter answers (e.g. "C") to the actual option value (e.g. "CPU")
+                opts = q.get("options")
+                ans = q.get("correct_answer", "")
+                if opts and isinstance(opts, dict) and ans in opts:
+                    q["correct_answer"] = opts[ans]
 
-                # Use difficulty from AI if provided, else use global target
+                q["source"] = "AI"
+                if question_type.upper() != "BOTH":
+                    q["question_type"] = question_type.lower()
+                elif "question_type" not in q:
+                    q["question_type"] = "mcq"
+
                 if "difficulty" not in q or q["difficulty"] is None:
                     q["difficulty"] = self._map_difficulty(difficulty)
-
-                # Ensure points is set
                 if "points" not in q or q["points"] is None:
                     q["points"] = (
                         points_per_q if points_per_q is not None
                         else (5.0 if question_type.lower() == "descriptive" else 1.0)
                     )
 
-            logger.info(f"Successfully parsed {len(questions)} questions from AI.")
+            logger.info(f"Parsed {len(questions)} questions from AI.")
             return questions
-
         except Exception as e:
-            logger.error(f"Failed to parse AI response: {e}\nResponse was: {response_text[:500]}")
+            logger.error(f"Parse error: {e}\nResponse: {response_text[:500]}")
             return []
 
-    def _build_prompt(
-        self,
-        text: str,
-        question_type: str,
-        count: int,
-        difficulty: str,
-        points_per_q: Optional[float] = None,
-    ) -> str:
+    # ── Prompt builder ─────────────────────────────────────────────────────────
+    def _build_prompt(self, text, question_type, count, difficulty,
+                      points_per_q=None, mcq_count=None, desc_count=None):
         points_str = f"Target Points per Question: {points_per_q}" if points_per_q else ""
-        if question_type.upper() == "MCQ":
-            return f"""
-            You are an expert examiner. Generate {count} Multiple Choice Questions (MCQs) from the provided text.
-            Target Difficulty: {difficulty} (If "Mixed", provide a variety of Easy, Medium, and Hard questions).
-            {points_str}
+        if question_type.upper() == "BOTH":
+            mc = mcq_count if mcq_count is not None else count // 2
+            dc = desc_count if desc_count is not None else count - mc
+            return f"""Generate a MIXED set of {mc + dc} questions from the text below:
+- {mc} MCQ questions
+- {dc} Descriptive questions
+Difficulty: {difficulty}
+{points_str}
 
-            IMPORTANT: Respond ONLY with a valid JSON array. Do not include any explanation or markdown.
+Respond ONLY with a JSON array. MCQ format:
+{{"question_text":"...","question_type":"mcq","options":{{"A":"...","B":"...","C":"...","D":"..."}},"correct_answer":"the option value","difficulty":0.5,"points":1.0}}
 
-            Output format — a JSON array of objects:
-            [
-              {{
-                "question_text": "text of the question",
-                "options": {{"A": "option 1", "B": "option 2", "C": "option 3", "D": "option 4"}},
-                "correct_answer": "Option Value (not the letter)",
-                "difficulty": 0.3,
-                "points": 1.0
-              }}
-            ]
+Descriptive format:
+{{"question_text":"...","question_type":"descriptive","model_answer":"detailed answer","difficulty":0.6,"points":5.0}}
 
-            Difficulty values: Easy=0.3, Medium=0.6, Hard=0.9
+Difficulty: Easy=0.3, Medium=0.6, Hard=0.9
 
-            TEXT:
-            {text}
-            """
+TEXT:
+{text}"""
+        elif question_type.upper() == "MCQ":
+            return f"""Generate {count} MCQs from the text below.
+Difficulty: {difficulty}
+{points_str}
+
+Respond ONLY with a JSON array:
+[{{"question_text":"...","options":{{"A":"...","B":"...","C":"...","D":"..."}},"correct_answer":"the option value","difficulty":0.3,"points":1.0}}]
+
+Difficulty: Easy=0.3, Medium=0.6, Hard=0.9
+
+TEXT:
+{text}"""
         else:
-            return f"""
-            You are an expert examiner. Generate {count} Descriptive (Long Answer) questions from the provided text.
-            Target Difficulty: {difficulty} (If "Mixed", provide a variety of Easy, Medium, and Hard questions).
-            {points_str}
+            return f"""Generate {count} Descriptive questions from the text below.
+Difficulty: {difficulty}
+{points_str}
 
-            IMPORTANT: Respond ONLY with a valid JSON array. Do not include any explanation or markdown.
+Respond ONLY with a JSON array:
+[{{"question_text":"...","model_answer":"detailed reference answer","difficulty":0.6,"points":5.0}}]
 
-            Output format — a JSON array of objects:
-            [
-              {{
-                "question_text": "text of the question",
-                "model_answer": "a detailed reference/model answer covering key points",
-                "difficulty": 0.6,
-                "points": 5.0
-              }}
-            ]
+Difficulty: Easy=0.3, Medium=0.6, Hard=0.9
 
-            Difficulty values: Easy=0.3, Medium=0.6, Hard=0.9
-
-            TEXT:
-            {text}
-            """
+TEXT:
+{text}"""
 
     def _map_difficulty(self, difficulty: str) -> float:
-        mapping = {
-            "Easy": 0.2,
-            "Medium": 0.5,
-            "Hard": 0.8,
-            "Mixed": 0.5,
-        }
-        return mapping.get(difficulty, 0.5)
+        return {"Easy": 0.2, "Medium": 0.5, "Hard": 0.8, "Mixed": 0.5}.get(difficulty, 0.5)
 
 
-# Singleton instance
 ai_generator = AIGeneratorAgent()

@@ -83,10 +83,11 @@ const StepDetails = ({ examData, setExamData }: StepDetailsProps) => {
                     <select
                         className="w-full h-11 px-3 rounded-md border-none ring-1 ring-primary/10 bg-muted/5 focus:ring-primary focus:ring-2 transition-all outline-none"
                         value={examData.type}
-                        onChange={(e) => setExamData({ ...examData, type: e.target.value as "MCQ" | "DESCRIPTIVE" })}
+                        onChange={(e) => setExamData({ ...examData, type: e.target.value as "MCQ" | "DESCRIPTIVE" | "BOTH" })}
                     >
                         <option value="MCQ">Multiple Choice Questions (MCQ)</option>
                         <option value="DESCRIPTIVE">Descriptive (Long Answer)</option>
+                        <option value="BOTH">Both (MCQ + Descriptive)</option>
                     </select>
                 </div>
                 <div className="space-y-2">

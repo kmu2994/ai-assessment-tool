@@ -51,7 +51,7 @@ class Exam(Document):
     title: str = Field(..., index=True)
     subject: str = ""
     description: Optional[str] = None
-    type: str = "MCQ"  # "MCQ" or "DESCRIPTIVE"
+    type: str = "MCQ"  # "MCQ", "DESCRIPTIVE", or "BOTH"
     created_by: PydanticObjectId
     is_active: bool = True
     is_adaptive: bool = True

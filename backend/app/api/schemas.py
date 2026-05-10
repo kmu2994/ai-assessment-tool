@@ -79,7 +79,7 @@ class ExamCreate(BaseModel):
     title: str
     subject: str = ""
     description: Optional[str] = None
-    type: str = "MCQ"
+    type: str = "MCQ"  # "MCQ", "DESCRIPTIVE", or "BOTH"
     is_active: bool = True
     is_adaptive: bool = True
     duration_minutes: int = 60
@@ -94,7 +94,7 @@ class ExamResponse(BaseModel):
     title: str
     subject: str = "General"
     description: Optional[str] = None
-    type: str = "MCQ"
+    type: str = "MCQ"  # "MCQ", "DESCRIPTIVE", or "BOTH"
     is_adaptive: bool = True
     duration_minutes: int = 60
     total_questions: int = 0
@@ -114,10 +114,13 @@ class ExtractTextResponse(BaseModel):
 
 class AIQuestionRequest(BaseModel):
     text: str
-    type: str = "MCQ"  # "MCQ" or "DESCRIPTIVE"
+    type: str = "MCQ"  # "MCQ", "DESCRIPTIVE", or "BOTH"
     count: int = 5
     difficulty: str = "Medium"  # "Easy", "Medium", "Hard", "Mixed"
     total_marks: Optional[float] = None
+    mcq_count: Optional[int] = None   # For BOTH type: how many MCQs
+    desc_count: Optional[int] = None  # For BOTH type: how many descriptive
+    provider: str = "gemini"  # "gemini" or "nvidia"
 
 class AnswerSubmit(BaseModel):
     question_id: str

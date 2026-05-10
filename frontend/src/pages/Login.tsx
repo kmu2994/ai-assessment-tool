@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Brain, Volume2, Contrast, Loader2, CheckCircle2, XCircle, Users } from "lucide-react";
+import { Brain, Volume2, Contrast, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { authApi, RegisterData } from "@/lib/api";
 import { useAccessibility } from "@/hooks/useAccessibility";
@@ -164,15 +164,6 @@ const Login = () => {
                     </div>
 
                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-6 pt-6">
-                        <div className="flex items-center gap-3 bg-card/50 backdrop-blur-sm border p-3 rounded-2xl shadow-sm">
-                            <div className="h-10 w-10 rounded-xl bg-accent/10 flex items-center justify-center">
-                                <Users className="h-5 w-5 text-accent" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-bold">10k+</p>
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Active Users</p>
-                            </div>
-                        </div>
                         <div className="flex items-center gap-3 bg-card/50 backdrop-blur-sm border p-3 rounded-2xl shadow-sm">
                             <div className="h-10 w-10 rounded-xl bg-success/10 flex items-center justify-center">
                                 <CheckCircle2 className="h-5 w-5 text-success" />

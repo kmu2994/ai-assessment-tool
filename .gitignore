@@ -1,4 +1,6 @@
-# Dependencies
+# ─────────────────────────────────────────────
+#  Dependencies
+# ─────────────────────────────────────────────
 node_modules/
 venv/
 .venv/
@@ -9,55 +11,76 @@ __pycache__/
 *.pyd
 .pytest_cache/
 
-# Environment files
+# ─────────────────────────────────────────────
+#  Environment & Secrets (NEVER commit these)
+# ─────────────────────────────────────────────
 .env
 .env.local
 .env.*.local
+backend/.env
 
-# Database and Storage
+# ─────────────────────────────────────────────
+#  Database & Uploads
+# ─────────────────────────────────────────────
 *.db
-backend/data/*.db
-backend/data/uploads/
+backend/data/uploads/*
+!backend/data/uploads/.gitkeep
 backend/uploads/
 
-# Build outputs
+# ─────────────────────────────────────────────
+#  Build Outputs
+# ─────────────────────────────────────────────
 dist/
 build/
 *.egg-info/
 *.tsbuildinfo
-vite.config.js
-vite.config.d.ts
 
-# IDE
+# ─────────────────────────────────────────────
+#  IDE & Editor
+# ─────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 
-# OS
+# ─────────────────────────────────────────────
+#  OS Files
+# ─────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Logs
+# ─────────────────────────────────────────────
+#  Logs & Coverage
+# ─────────────────────────────────────────────
 *.log
 logs/
-
-# Test coverage
 coverage/
 htmlcov/
 .coverage
 
-# Docker cache (optional - keep docker files)
+# ─────────────────────────────────────────────
+#  Docker
+# ─────────────────────────────────────────────
 .docker/
 
-# Debug / scratch scripts (should not be committed)
-reproduce_safeguard_failure.py
-backend/check_db.py
-backend/check_db_debug.py
-backend/check_imports.py
-backend/clear_qbank.py
-backend/test_ai.py
-backend/test_bert_grading.py
-backend/test_results.txt
+# ─────────────────────────────────────────────
+#  Debug / Test / Scratch Scripts
+# ─────────────────────────────────────────────
+backend/test_*.py
+backend/check_*.py
+backend/clear_*.py
 backend/startup_log.txt
 backend/temp_requirements.txt
+reproduce_safeguard_failure.py
+
+# ─────────────────────────────────────────────
+#  Thesis (keep separately — not part of app)
+# ─────────────────────────────────────────────
+thesis.tex
+*.aux
+*.bbl
+*.blg
+*.synctex.gz

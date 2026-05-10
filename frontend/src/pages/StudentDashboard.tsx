@@ -9,7 +9,7 @@ import {
     TrendingUp, FileText, Award, PlayCircle, Clock,
     Loader2, ChevronRight, BookOpen, CheckCircle2,
     XCircle, AlertCircle, Calendar, BarChart3,
-    GraduationCap, Shield, Zap, Target
+    GraduationCap, Shield, Zap, Target, ChevronLeft, CalendarDays
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { analyticsApi, examsApi, StudentAnalytics, Exam } from "@/lib/api";
@@ -22,6 +22,8 @@ const StudentDashboard = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [analytics, setAnalytics] = useState<StudentAnalytics | null>(null);
     const [availableExams, setAvailableExams] = useState<Exam[]>([]);
+    const [calendarMonth, setCalendarMonth] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
     const getUser = () => {
         try { return JSON.parse(localStorage.getItem('user') || '{}'); }
@@ -314,6 +316,92 @@ const StudentDashboard = () => {
 
                     {/* ── RIGHT COLUMN ── */}
                     <div className="space-y-4">
+
+                        {/* ── Exam Calendar ── */}
+                        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                            <CalendarDays className="h-4 w-4" />
+                            Exam Calendar
+                        </h2>
+                        {(() => {
+                            const year = calendarMonth.getFullYear();
+                            const month = calendarMonth.getMonth();
+                            const firstDay = new Date(year, month, 1).getDay();
+                            const daysInMonth = new Date(year, month + 1, 0).getDate();
+                            const todayStr = new Date().toISOString().split('T')[0];
+                            const examDates = new Set(
+                                availableExams
+                                    .filter(e => e.scheduled_at)
+                                    .map(e => e.scheduled_at!.split('T')[0])
+                            );
+                            const days: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+                            const examsOnSelected = selectedDate
+                                ? availableExams.filter(e => e.scheduled_at?.startsWith(selectedDate))
+                                : [];
+
+                            return (
+                                <div className="bg-card border rounded-2xl p-4 shadow-sm space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCalendarMonth(new Date(year, month - 1, 1))}>
+                                            <ChevronLeft className="h-4 w-4" />
+                                        </Button>
+                                        <span className="text-sm font-bold">
+                                            {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                        </span>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCalendarMonth(new Date(year, month + 1, 1))}>
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    <div className="grid grid-cols-7 gap-1 text-center">
+                                        {['S','M','T','W','T','F','S'].map((d, i) => (
+                                            <div key={i} className="text-[9px] font-bold text-muted-foreground uppercase py-1">{d}</div>
+                                        ))}
+                                        {days.map((day, i) => {
+                                            if (day === null) return <div key={`e-${i}`} />;
+                                            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                                            const hasExam = examDates.has(dateStr);
+                                            const isToday = dateStr === todayStr;
+                                            const isSelected = dateStr === selectedDate;
+                                            return (
+                                                <button
+                                                    key={dateStr}
+                                                    onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                                                    className={`relative aspect-square flex items-center justify-center text-xs font-semibold rounded-lg transition-all
+                                                        ${isSelected ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-1 scale-110' :
+                                                          isToday ? 'bg-primary/10 text-primary font-bold ring-1 ring-primary/30' :
+                                                          hasExam ? 'hover:bg-primary/5' : 'hover:bg-muted/50 text-muted-foreground'}`}
+                                                >
+                                                    {day}
+                                                    {hasExam && !isSelected && (
+                                                        <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {selectedDate && examsOnSelected.length > 0 && (
+                                        <div className="border-t pt-3 space-y-2">
+                                            <p className="text-[10px] font-bold text-muted-foreground uppercase">Exams on {new Date(selectedDate + 'T00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                                            {examsOnSelected.map(ex => (
+                                                <div key={ex.id} className="flex items-center justify-between bg-primary/5 rounded-lg px-3 py-2">
+                                                    <div>
+                                                        <p className="text-xs font-bold">{ex.title}</p>
+                                                        <p className="text-[10px] text-muted-foreground">{ex.subject} · {ex.duration_minutes}min</p>
+                                                    </div>
+                                                    {!ex.has_submitted && (
+                                                        <Button size="sm" className="h-7 text-[10px] font-bold" onClick={() => navigate(`/exam/${ex.id}`)}>
+                                                            Start
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {selectedDate && examsOnSelected.length === 0 && (
+                                        <p className="text-[10px] text-muted-foreground text-center pt-2">No exams on this date</p>
+                                    )}
+                                </div>
+                            );
+                        })()}
 
                         {/* Performance Card */}
                         <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">

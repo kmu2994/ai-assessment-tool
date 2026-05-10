@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Clock, Mic, MicOff, Loader2, AlertCircle, Volume2, FileUp, Paperclip, X } from "lucide-react";
+import { Clock, Mic, MicOff, Loader2, AlertCircle, Volume2, FileUp, Paperclip, X, Camera, ShieldCheck } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
 import { examsApi, ExamSession, Question, GradingResult } from "@/lib/api";
@@ -29,6 +29,8 @@ const Exam = () => {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [filePreview, setFilePreview] = useState<string | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [cameraActive, setCameraActive] = useState(false);
+    const videoRef = useRef<HTMLVideoElement>(null);
     const isFinishing = useRef(false);
 
     // FIX: Store recognition instance in a ref to prevent multiple active instances
@@ -52,6 +54,29 @@ const Exam = () => {
             }
         };
     }, []);
+
+    // Webcam proctoring — auto-start camera when session begins
+    useEffect(() => {
+        if (!session) return;
+        let stream: MediaStream | null = null;
+        const startCamera = async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240, facingMode: 'user' }, audio: false });
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    setCameraActive(true);
+                }
+            } catch {
+                toast.warning("Camera access denied. Proctoring will continue without video.", { duration: 4000 });
+                setCameraActive(false);
+            }
+        };
+        startCamera();
+        return () => {
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            setCameraActive(false);
+        };
+    }, [session]);
 
     // Proctoring Logic
     useEffect(() => {
@@ -81,11 +106,38 @@ const Exam = () => {
             setIsFullscreen(isFull);
             if (!isFull) {
                 const details = `User exited full screen mode at ${new Date().toLocaleTimeString()}`;
-                toast.error("AI PROCTOR ALERT: Full screen mode disabled! This activity is being logged.", {
-                    duration: 5000,
+                toast.error("AI PROCTOR: Please re-enter full screen to continue.", {
+                    duration: 8000,
                     style: { backgroundColor: '#fee2e2', color: '#991b1b', border: '1px solid #f87171' }
                 });
                 examsApi.logProctorEvent(session.submission_id, "fullscreen_exit", details);
+                // Auto-prompt to re-enter fullscreen after 2 seconds
+                setTimeout(() => {
+                    if (!document.fullscreenElement) {
+                        document.documentElement.requestFullscreen().catch(() => {});
+                    }
+                }, 2000);
+            }
+        };
+
+        // Block right-click context menu
+        const handleContextMenu = (e: MouseEvent) => {
+            e.preventDefault();
+            toast.error("Right-click is disabled during the exam.", { duration: 2000 });
+        };
+
+        // Block keyboard shortcuts (Ctrl+C/V/A, F12, Alt+Tab, etc.)
+        const handleKeydown = (e: KeyboardEvent) => {
+            if (
+                (e.ctrlKey && ['c','v','a','u','s','p'].includes(e.key.toLowerCase())) ||
+                e.key === 'F12' ||
+                (e.ctrlKey && e.shiftKey && ['i','j','c'].includes(e.key.toLowerCase())) ||
+                (e.altKey && e.key === 'Tab')
+            ) {
+                e.preventDefault();
+                e.stopPropagation();
+                toast.error("This keyboard shortcut is disabled during the exam.", { duration: 2000 });
+                examsApi.logProctorEvent(session.submission_id, "blocked_shortcut", `Blocked: ${e.key}`);
             }
         };
 
@@ -93,12 +145,25 @@ const Exam = () => {
         document.addEventListener("copy", handleCopyPaste);
         document.addEventListener("paste", handleCopyPaste);
         document.addEventListener("fullscreenchange", handleFullscreenChange);
+        document.addEventListener("contextmenu", handleContextMenu);
+        document.addEventListener("keydown", handleKeydown, true);
+
+        // Auto-enter fullscreen on exam start
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+        }
 
         return () => {
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             document.removeEventListener("copy", handleCopyPaste);
             document.removeEventListener("paste", handleCopyPaste);
             document.removeEventListener("fullscreenchange", handleFullscreenChange);
+            document.removeEventListener("contextmenu", handleContextMenu);
+            document.removeEventListener("keydown", handleKeydown, true);
+            // Exit fullscreen on unmount
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+            }
         };
     }, [session]);
 
@@ -306,14 +371,37 @@ const Exam = () => {
 
         recognition.continuous = true;
         recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        // Snapshot the answer text before we start so we can
+        // replace only the "in-progress" portion on each event.
+        let baseText = descriptiveAnswer;
+        let committedFromSpeech = '';   // final results accumulated this session
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         recognition.onresult = (event: any) => {
-            let transcript = '';
+            let interimTranscript = '';
+            let finalTranscript = '';
+
             for (let i = event.resultIndex; i < event.results.length; i++) {
-                transcript += event.results[i][0].transcript;
+                const transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcript;
+                } else {
+                    interimTranscript += transcript;
+                }
             }
-            setDescriptiveAnswer(prev => prev + ' ' + transcript);
+
+            // Append any newly finalized text
+            if (finalTranscript) {
+                committedFromSpeech += ' ' + finalTranscript.trim();
+            }
+
+            // Set the answer = base (before recording) + committed finals + current interim preview
+            const interimPreview = interimTranscript ? ' ' + interimTranscript.trim() : '';
+            setDescriptiveAnswer(
+                (baseText + committedFromSpeech + interimPreview).trim()
+            );
         };
 
         recognition.onerror = () => {
@@ -323,6 +411,8 @@ const Exam = () => {
         };
 
         recognition.onend = () => {
+            // Finalize: strip any leftover interim preview, keep only committed text
+            setDescriptiveAnswer((baseText + committedFromSpeech).trim());
             setIsRecording(false);
             recognitionRef.current = null;
         };
@@ -361,13 +451,14 @@ const Exam = () => {
 
     return (
         <div className="min-h-screen bg-background">
-            <Navbar />
+            <Navbar examLocked={true} />
 
             <main className="container mx-auto p-4 lg:p-6 max-w-7xl animate-fade-in">
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    {/* Sidebar - Question Navigation */}
+                    {/* Sidebar - Question Navigation & Camera */}
                     <aside className="lg:col-span-1 order-2 lg:order-1">
-                        <Card className="sticky top-24 shadow-md bg-muted/20 border-none">
+                        <div className="sticky top-20 space-y-4 max-h-[calc(100vh-6rem)] overflow-y-auto pr-1 pb-2">
+                        <Card className="shadow-md bg-muted/20 border-none">
                             <CardHeader className="pb-3 text-center border-b">
                                 <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
                                     Exam Progress
@@ -412,6 +503,51 @@ const Exam = () => {
                                 </div>
                             </CardContent>
                         </Card>
+
+                        {/* Camera Proctoring Widget */}
+                        <Card className="mt-4 shadow-md bg-muted/20 border-none overflow-hidden">
+                            <CardHeader className="pb-2 pt-3 px-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Camera className="h-3.5 w-3.5 text-primary" />
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">AI Proctor</span>
+                                    </div>
+                                    <div className={`flex items-center gap-1.5 ${cameraActive ? 'text-success' : 'text-destructive'}`}>
+                                        <div className={`w-2 h-2 rounded-full ${cameraActive ? 'bg-success animate-pulse' : 'bg-destructive'}`} />
+                                        <span className="text-[9px] font-bold uppercase">{cameraActive ? 'Live' : 'Off'}</span>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-2 pt-0">
+                                <div className="relative rounded-lg overflow-hidden bg-black aspect-[4/3]">
+                                    <video
+                                        ref={videoRef}
+                                        autoPlay
+                                        playsInline
+                                        muted
+                                        className="w-full h-full object-cover mirror"
+                                        style={{ transform: 'scaleX(-1)' }}
+                                    />
+                                    {!cameraActive && (
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center text-white/60 gap-2">
+                                            <Camera className="h-8 w-8" />
+                                            <span className="text-[10px] font-bold">Camera Inactive</span>
+                                        </div>
+                                    )}
+                                    {cameraActive && (
+                                        <div className="absolute top-2 left-2 flex items-center gap-1 bg-red-600/90 text-white px-1.5 py-0.5 rounded text-[8px] font-bold">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                            REC
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-2 px-1">
+                                    <ShieldCheck className="h-3 w-3 text-primary" />
+                                    <span className="text-[9px] text-muted-foreground">AI monitoring active</span>
+                                </div>
+                            </CardContent>
+                        </Card>
+                        </div>
                     </aside>
 
                     {/* Main Content */}

@@ -65,6 +65,8 @@ const CreateAssessmentFlow = ({ onClose, onSuccess }: CreateAssessmentFlowProps)
 
     // Sync new question template when assessment type changes
     useEffect(() => {
+        // For BOTH type, don't auto-switch — let user pick per question
+        if (examData.type === "BOTH") return;
         setNewQuestion((prev) => ({
             ...prev,
             question_type: examData.type.toLowerCase() as "mcq" | "descriptive",
